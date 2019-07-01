@@ -1,0 +1,230 @@
+﻿syntax = "proto3";
+
+package AmazeingEvening;
+
+//////////////////////////////////////////////////////////////
+///Player/////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+
+service Player {
+	rpc Register(RegisterRequest) returns (RegisterResponse) {}
+	rpc GetMyInfo(GetMyInfoRequest) returns (GetMyInfoResponse) {}
+	rpc ForgetMe(ForgetMeRequest) returns (ForgetMeResponse) {}
+}
+
+///Register///////////////////////////////////////////////////
+
+message RegisterRequest {
+	string name = 1;
+}
+
+message RegisterResponse {
+	enum Result {
+		SUCCESS = 0;
+		FAILURE_UNAUTHORIZED = 1;
+		FAILURE_INVALID_NAME = 2;
+		FAILURE_ALREADY_REGISTERED = 3;
+	}
+
+	Result result = 1;
+}
+
+///GetMyInfo//////////////////////////////////////////////////
+
+message GetMyInfoRequest {}
+
+message GetMyInfoResponse {
+	enum FailureReason {
+		UNAUTHORIZED = 0;
+		NOT_REGISTERED = 1;
+	}
+
+	oneof result {
+		FailureReason failure_reason = 1;
+		PlayerInfo player_info = 2;
+	}
+}
+
+message PlayerInfo {
+	string player_id = 1;
+	string name = 2;
+	bool has_found_easter_egg = 3;
+	uint32 score = 4;
+
+	oneof maybe_playthrough {
+		PlaythroughInfo playthrough_info = 5;
+	}
+}
+
+message PlaythroughInfo {
+	string maze_name = 1;
+	uint32 score_in_hand = 2;
+	uint32 score_in_bag = 3;
+}
+
+///ForgetMe///////////////////////////////////////////////////
+
+message ForgetMeRequest {}
+
+message ForgetMeResponse {
+	enum Result {
+		SUCCESS = 0;
+		FAILURE_UNAUTHORIZED = 1;
+	}
+
+	Result result = 1;
+}
+
+//////////////////////////////////////////////////////////////
+///Mazes//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+
+service Mazes {
+	rpc GetAllAvailableMazes(GetAllAvailableMazesRequest) returns (GetAllAvailableMazesResponse) {}
+}
+
+///GetAllAvailableMazes///////////////////////////////////////
+
+message GetAllAvailableMazesRequest {}
+
+message GetAllAvailableMazesResponse {
+	repeated MazeInfo available_mazes = 1;
+}
+
+message MazeInfo {
+	string name = 1;
+	uint32 total_tiles = 2;
+	uint32 potential_reward = 3;
+}
+
+//////////////////////////////////////////////////////////////
+///Maze///////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+
+service Maze {
+	rpc EnterMaze(EnterMazeRequest) returns (EnterMazeResponse) {}
+	rpc GetPossibleActions(GetPossibleActionsRequest) returns (GetPossibleActionsResponse) {}
+	rpc Move(MoveRequest) returns (MoveResponse) {}
+	rpc CollectScore(CollectScoreRequest) returns (CollectScoreResponse) {}
+	rpc ExitMaze(ExitMazeRequest) returns (ExitMazeResponse) {}
+}
+
+///EnterMaze//////////////////////////////////////////////////
+
+message EnterMazeRequest {
+	string maze_name = 1;
+}
+
+message EnterMazeResponse {
+	enum FailureReason {
+		FAILURE_UNAUTHORIZED = 0;
+		FAILURE_NOT_REGISTERED = 1;
+		FAILURE_NON_EXISTENT_MAZE = 2;
+		FAILURE_ALREADY_IN_A_MAZE = 3;
+		FAILURE_ALREADY_PLAYED_MAZE = 4;
+		FAILURE_CONCURRENT_UPDATE = 5;
+	}
+
+	oneof result {
+		FailureReason failure_reason = 1;
+		PossibleActionsAndCurrentScore possible_actions_and_current_score = 2;
+	}
+}
+
+///GetPossibleActions/////////////////////////////////////////
+
+message GetPossibleActionsRequest {}
+
+message GetPossibleActionsResponse {
+	enum FailureReason {
+		UNAUTHORIZED = 0;
+		NOT_REGISTERED = 1;
+		NOT_IN_A_MAZE = 2;
+	}
+
+	oneof result {
+		FailureReason failure_reason = 1;
+		PossibleActionsAndCurrentScore possible_actions_and_current_score = 2;
+	}
+}
+
+message PossibleActionsAndCurrentScore {
+	repeated MoveAction move_actions = 1;
+	bool can_collect_score_here = 2;
+	bool can_exit_maze_here = 3;
+	uint32 current_score_in_hand = 4;
+	uint32 current_score_in_bag = 5;
+}
+
+message MoveAction {
+	MoveDirection direction = 1;
+	bool is_start = 2;
+	bool allows_exit = 3;
+	bool allows_score_collection = 4;
+	bool has_been_visited = 5;
+	uint32 reward = 6;
+}
+
+enum MoveDirection {
+	UP = 0;
+	RIGHT = 1;
+	DOWN = 2;
+	LEFT = 3;
+}
+
+///Move///////////////////////////////////////////////////////
+
+message MoveRequest {
+	MoveDirection direction = 1;
+}
+
+message MoveResponse {
+	enum FailureReason {
+		FAILURE_UNAUTHORIZED = 0;
+		FAILURE_NOT_REGISTERED = 1;
+		FAILURE_NOT_IN_A_MAZE = 2;
+		FAILURE_CONCURRENT_UPDATE = 3;
+	}
+
+	oneof result {
+		FailureReason failure_reason = 1;
+		PossibleActionsAndCurrentScore possible_actions_and_current_score = 2;
+	}
+}
+
+///CollectScore///////////////////////////////////////////////
+
+message CollectScoreRequest {}
+
+message CollectScoreResponse {
+	enum FailureReason {
+		FAILURE_UNAUTHORIZED = 0;
+		FAILURE_NOT_REGISTERED = 1;
+		FAILURE_NOT_IN_A_MAZE = 2;
+		FAILURE_CONCURRENT_UPDATE = 3;
+		FAILURE_NOT_IN_A_SCORE_COLLECTION_POINT = 4;
+		FAILURE_NO_SCORE_TO_COLLECT = 5;
+	}
+
+	oneof result {
+		FailureReason failure_reason = 1;
+		PossibleActionsAndCurrentScore possible_actions_and_current_score = 2;
+	}
+}
+
+///ExitMaze///////////////////////////////////////////////////
+
+message ExitMazeRequest {}
+
+message ExitMazeResponse {
+	enum Result {
+		SUCCESS = 0;
+		FAILURE_UNAUTHORIZED = 1;
+		FAILURE_NOT_REGISTERED = 2;
+		FAILURE_NOT_IN_A_MAZE = 3;
+		FAILURE_NOT_IN_AN_EXIT_POINT = 4;
+		FAILURE_CONCURRENT_UPDATE = 5;
+	}
+
+	Result result = 1;
+}
