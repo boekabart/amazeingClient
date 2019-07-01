@@ -31,6 +31,8 @@ namespace gRPCGuide
             var availableMazesResult = await MakeRequest(mazesClient.GetAllAvailableMazesAsync, new GetAllAvailableMazesRequest());
             foreach (var maze in availableMazesResult.AvailableMazes)
                 Console.WriteLine($"Maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
+				
+			await channel.ShutdownAsync();
         }
     }
 }
