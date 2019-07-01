@@ -19,6 +19,7 @@ bld/
 
 # Roslyn cache directories
 *.ide/
+.vscode/
 
 # Rider directories
 .idea/
