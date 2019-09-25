@@ -10,7 +10,7 @@ namespace gRPCGuide
     {
         static async Task Main(string[] args)
         {
-            var channel = new Channel(host: "10.100.100.182", port: 5001, ChannelCredentials.Insecure);
+            var channel = new Channel(host: "10.100.100.100", port: 5001, ChannelCredentials.Insecure);
 
             var options = new CallOptions(headers: new Metadata { { "Authorization", args.FirstOrDefault() ?? throw new Exception("Key?") } });
 
@@ -23,7 +23,7 @@ namespace gRPCGuide
                 requestFunc(requestPayload, options).ResponseAsync;
 
             /// Register ourselves
-            var ourName = $"gRPC guide ({Guid.NewGuid().ToString().Substring(0, 5)})";
+            var ourName = $"deBoerIsTroef";
             var registerResult = await MakeRequest(playerClient.RegisterAsync, new RegisterRequest { Name = ourName });
             Console.WriteLine($"Registration result: [{registerResult.Result}]");
 
