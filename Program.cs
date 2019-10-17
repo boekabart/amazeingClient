@@ -17,7 +17,7 @@ namespace gRPCGuide
             requestFunc(requestPayload, _options).ResponseAsync;
         static async Task Main(string[] args)
         {
-            var channel = new Channel(host: "10.100.100.100", port: 5001, ChannelCredentials.Insecure);
+            var channel = new Channel(host: "maze.hightechict.nl", port: 5001, ChannelCredentials.Insecure);
 
             _options = new CallOptions(headers: new Metadata { { "Authorization", args.FirstOrDefault() ?? throw new Exception("Key?") } });
 
@@ -28,7 +28,7 @@ namespace gRPCGuide
             Console.WriteLine("Forgot myself");
 
             /// Register ourselves
-            var ourName = $"deBoerIsTroef";
+            var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
             var registerResult = await MakeRequest(playerClient.RegisterAsync, new RegisterRequest { Name = ourName });
             Console.WriteLine($"Registration result: [{registerResult.Result}]");
 
@@ -41,7 +41,6 @@ namespace gRPCGuide
                 await DoMaze(maze, channel);
                 
             }
-
 
             await channel.ShutdownAsync();
         }
@@ -105,7 +104,7 @@ namespace gRPCGuide
                     }
 
                     // Looking for collection point!
-                    var stack = _collectCrumbs.OrderBy(st => st.Count).FirstOrDefault();
+                    var stack = FindBestCollectStack(_collectCrumbs, _exitCrumbs);
                     if (stack == null)
                     {
                         continue;
@@ -136,6 +135,12 @@ namespace gRPCGuide
                 continue;
             }
 
+        }
+
+        private static Stack<MoveDirection> FindBestCollectStack(List<Stack<MoveDirection>> collectCrumbs, List<Stack<MoveDirection>> exitCrumbs)
+        {
+            var stack = collectCrumbs.OrderBy(st => st.Count).FirstOrDefault();
+            return stack;
         }
 
         private static void TrackExits(PossibleActionsAndCurrentScore options, List<Stack<MoveDirection>> exitCrumbs)
@@ -186,25 +191,11 @@ namespace gRPCGuide
 
         private static MoveAction MostUsefulDir(PossibleActionsAndCurrentScore options, MazeInfo mazeInfo)
         {
-/*            if (options.CurrentScoreInHand > 0 &&
-                options.CurrentScoreInHand + options.CurrentScoreInBag >= mazeInfo.PotentialReward)
-            {
-                var collectionPoint = options.MoveActions.FirstOrDefault(ma => ma.AllowsScoreCollection);
-                if (collectionPoint != null)
-                    return collectionPoint;
-            }
-
-            if (options.CurrentScoreInBag >= mazeInfo.PotentialReward)
-            {
-                var exit = options.MoveActions.FirstOrDefault(ma => ma.AllowsExit);
-                if (exit != null)
-                    return exit;
-            }*/
-
-            var mostUsefulDir = options.MoveActions.Where(ma => !ma.HasBeenVisited)
-                .OrderBy(ma => ma.AllowsScoreCollection)
-                .ThenBy(ma => ma.AllowsExit)
-                .ThenByDescending(ma => ma.Reward)
+            var mostUsefulDir = options
+			    .MoveActions.Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
+                .OrderBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
+                .ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
+                .ThenByDescending(ma => ma.Reward) // Prefer high reward directions. Gut feeling, no real reason...
                 .FirstOrDefault();
             return mostUsefulDir;
         }
