@@ -211,8 +211,8 @@ namespace Maze
                 .MoveActions
                 .Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
                 .OrderBy(_ => 1)
-                .ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
-                .ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
+                //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
+                //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.Reward == 0) // Prefer reward directions over non-reward. It might be the last straw!
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 //.ThenBy(ma => RandomGenerator.Next())
