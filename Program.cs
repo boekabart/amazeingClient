@@ -47,7 +47,7 @@ namespace Maze
             
             // List all the available mazes
             var availableMazesResult = await MakeRequest(mazesClient.GetAllAvailableMazesAsync, new GetAllAvailableMazesRequest());
-            foreach (var maze in availableMazesResult.AvailableMazes.OrderByDescending(maze => maze.TotalTiles))
+            foreach (var maze in availableMazesResult.AvailableMazes.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles))
             {
                 Console.WriteLine(
                     $"Maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
