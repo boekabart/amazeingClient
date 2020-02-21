@@ -128,7 +128,7 @@ namespace Maze
                     continue;
                 }
 
-                Console.WriteLine("Stuck while collecting!");
+                Console.Error.WriteLine("Stuck while collecting!");
             }
 
             return options;
