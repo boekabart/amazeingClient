@@ -2,23 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AmazeingEvening;
 
 namespace Maze
 {
     internal class MazeSolver
     {
-        private readonly IMazeClient _client;
+        private readonly IAmazeingClient _client;
 
-        public MazeSolver( IMazeClient client,MazeInfo maze )
+        public MazeSolver( IAmazeingClient client,MazeInfo maze )
         {
             _client = client;
             this._maze = maze;
         }
         public async Task Solve()
         {
-            var response = await _client.EnterMaze(_maze);
-            var options = response.PossibleActionsAndCurrentScore;
+            var options = await _client.EnterMaze(_maze.Name);
             TrackExits(options, _exitCrumbs);
             TrackCollectionPoints(options, _collectCrumbs);
 
@@ -76,7 +74,7 @@ namespace Maze
             {
                 if (options.CanCollectScoreHere)
                 {
-                    options = (await _client.CollectScore()).PossibleActionsAndCurrentScore;
+                    options = await _client.CollectScore();
                     continue;
                 }
 
@@ -136,43 +134,42 @@ namespace Maze
             return options;
         }
 
-        private static Stack<MoveDirection> FindBestCollectStack(List<Stack<MoveDirection>> collectCrumbs,
-            List<Stack<MoveDirection>> exitCrumbs)
+        private static Stack<Direction> FindBestCollectStack(List<Stack<Direction>> collectCrumbs,
+            List<Stack<Direction>> exitCrumbs)
         {
             var stack = collectCrumbs.OrderBy(st => st.Count).FirstOrDefault();
             return stack;
         }
 
         private static void TrackExits(PossibleActionsAndCurrentScore options,
-            List<Stack<MoveDirection>> exitCrumbs)
+            List<Stack<Direction>> exitCrumbs)
         {
-            foreach (var dir in options.MoveActions.Where(ma => ma.AllowsExit))
+            foreach (var dir in options.PossibleMoveActions.Where(ma => ma.AllowsExit))
             {
-                var stack = new Stack<MoveDirection>();
+                var stack = new Stack<Direction>();
                 stack.Push(ReverseDir(dir.Direction));
                 exitCrumbs.Add(stack);
             }
         }
 
         private static void TrackCollectionPoints(PossibleActionsAndCurrentScore options,
-            List<Stack<MoveDirection>> collectCrumbs)
+            List<Stack<Direction>> collectCrumbs)
         {
-            foreach (var dir in options.MoveActions.Where(ma => ma.AllowsScoreCollection))
+            foreach (var dir in options.PossibleMoveActions.Where(ma => ma.AllowsScoreCollection))
             {
-                var stack = new Stack<MoveDirection>();
+                var stack = new Stack<Direction>();
                 stack.Push(ReverseDir(dir.Direction));
                 collectCrumbs.Add(stack);
             }
         }
 
-        private async Task<PossibleActionsAndCurrentScore> MakeMove(MoveDirection direction,
-            List<Stack<MoveDirection>> exitCrumbs, List<Stack<MoveDirection>> collectCrumbs,
-            Stack<MoveDirection> crumbs)
+        private async Task<PossibleActionsAndCurrentScore> MakeMove(Direction direction,
+            List<Stack<Direction>> exitCrumbs, List<Stack<Direction>> collectCrumbs,
+            Stack<Direction> crumbs)
         {
             try
             {
-                var newOptions = (await _client.Move(direction))
-                    .PossibleActionsAndCurrentScore;
+                var newOptions = await _client.Move(direction);
                 if (newOptions == null)
                     throw new ArgumentException();
                 
@@ -200,20 +197,20 @@ namespace Maze
 
         static readonly Random RandomGenerator = new Random();
         private readonly MazeInfo _maze;
-        private readonly Stack<MoveDirection> _crawlCrumbs = new Stack<MoveDirection>();
-        private readonly List<Stack<MoveDirection>> _collectCrumbs = new List<Stack<MoveDirection>>();
-        private readonly List<Stack<MoveDirection>> _exitCrumbs = new List<Stack<MoveDirection>>();
+        private readonly Stack<Direction> _crawlCrumbs = new Stack<Direction>();
+        private readonly List<Stack<Direction>> _collectCrumbs = new List<Stack<Direction>>();
+        private readonly List<Stack<Direction>> _exitCrumbs = new List<Stack<Direction>>();
 
         private static MoveAction MostUsefulDirForCollecting(PossibleActionsAndCurrentScore options,
-            Stack<MoveDirection> crawlCrumbs)
+            Stack<Direction> crawlCrumbs)
         {
             var mostUsefulDir = options
-                .MoveActions
+                .PossibleMoveActions
                 .Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
                 .OrderBy(_ => 1)
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
-                .ThenBy(ma => ma.Reward == 0) // Prefer reward directions over non-reward. It might be the last straw!
+                .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
@@ -222,10 +219,10 @@ namespace Maze
         }
 
         private static MoveAction MostUsefulDirForLocatingCollectionPoint(PossibleActionsAndCurrentScore options,
-            Stack<MoveDirection> crawlCrumbs)
+            Stack<Direction> crawlCrumbs)
         {
             var mostUsefulDir = options
-                .MoveActions
+                .PossibleMoveActions
                 .Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
                 .OrderBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
@@ -234,17 +231,17 @@ namespace Maze
         }
 
         private static MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options,
-            Stack<MoveDirection> crawlCrumbs)
+            Stack<Direction> crawlCrumbs)
         {
             var mostUsefulDir = options
-                .MoveActions
+                .PossibleMoveActions
                 .Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
                 .OrderBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 .FirstOrDefault();
             return mostUsefulDir;
         }
 
-        private static int HugTheLeftWall(MoveDirection possibleDirection, Stack<MoveDirection> crawlCrumbs)
+        private static int HugTheLeftWall(Direction possibleDirection, Stack<Direction> crawlCrumbs)
         {
             if (crawlCrumbs.Count == 0)
                 return 0;
@@ -252,12 +249,12 @@ namespace Maze
             return HugTheLeftWall(possibleDirection, incomingDirection);
         }
 
-        static int HugTheLeftWall(MoveDirection possibleDirection, MoveDirection incomingDirection)
+        static int HugTheLeftWall(Direction possibleDirection, Direction incomingDirection)
         {
             return (5 + possibleDirection - incomingDirection) % 4;
         }
 
-        static void Push(Stack<MoveDirection> stack, MoveDirection dir)
+        static void Push(Stack<Direction> stack, Direction dir)
         {
             if (stack.Count == 0)
             {
@@ -271,14 +268,14 @@ namespace Maze
                 stack.Push(dir);
         }
 
-        private static MoveDirection ReverseDir(MoveDirection bestDir)
+        private static Direction ReverseDir(Direction bestDir)
         {
             switch (bestDir)
             {
-                case MoveDirection.Down: return MoveDirection.Up;
-                case MoveDirection.Up: return MoveDirection.Down;
-                case MoveDirection.Left: return MoveDirection.Right;
-                case MoveDirection.Right: return MoveDirection.Left;
+                case Direction.Down: return Direction.Up;
+                case Direction.Up: return Direction.Down;
+                case Direction.Left: return Direction.Right;
+                case Direction.Right: return Direction.Left;
                 default:
                     throw new ArgumentException("Bad dir");
             }
