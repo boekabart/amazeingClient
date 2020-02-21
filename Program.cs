@@ -18,9 +18,11 @@ namespace Maze
             if (!args.Any() || !int.TryParse(args.Skip(3).FirstOrDefault() ?? "5005", out var serverPort))
             {
                 await Console.Error.WriteLineAsync("Usage:");
-                await Console.Error.WriteLineAsync("Maze \"<ApiKey>\" [PlayerName] [host] [port]");
+                await Console.Error.WriteLineAsync("Maze \"<ApiKey>\" [PlayerName] [host] [port] [Maze]*");
                 return;
             }
+			
+			var mazeNames = args.Skip(4).ToHashSet();
             var serverHost = args.Skip(2).FirstOrDefault() ?? "maze.hightechict.nl";
             var apiKey = args.FirstOrDefault() ?? throw new Exception("Key?");
             var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
@@ -46,8 +48,19 @@ namespace Maze
             var mazeProxy = new SimpleMazeClient(mazeClient, _grpcCallOptions);
             
             // List all the available mazes
-            var availableMazesResult = await MakeRequest(mazesClient.GetAllAvailableMazesAsync, new GetAllAvailableMazesRequest());
-            foreach (var maze in availableMazesResult.AvailableMazes.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles))
+            var availableMazes = (await
+				MakeRequest(mazesClient.GetAllAvailableMazesAsync, new GetAllAvailableMazesRequest()))
+				.AvailableMazes
+				.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles)
+				.ToList();
+			foreach( var m in availableMazes)
+			{
+				Console.WriteLine(m.Name);
+			}
+			var selectedMazes = mazeNames.Any()
+			  ? availableMazes.Where(m => mazeNames.Contains(m.Name)).ToList()
+			  : availableMazes;
+            foreach (var maze in selectedMazes)
             {
                 Console.WriteLine(
                     $"Maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
