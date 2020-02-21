@@ -1,85 +1,77 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AmazeingEvening;
-using Grpc.Core;
 
 namespace Maze
 {
     static class Program
     {
-        private static CallOptions _grpcCallOptions;
-
         /// MakeRequest is a helper function, that ensures the authorization header is sent in each communication with the server
-        static Task<TResp> MakeRequest<TReq, TResp>(Func<TReq, CallOptions, AsyncUnaryCall<TResp> > requestFunc, TReq requestPayload) =>
-            requestFunc(requestPayload, _grpcCallOptions).ResponseAsync;
         static async Task Main(string[] args)
         {
-            if (!args.Any() || !int.TryParse(args.Skip(3).FirstOrDefault() ?? "5005", out var serverPort))
+            if (!args.Any())
             {
                 await Console.Error.WriteLineAsync("Usage:");
-                await Console.Error.WriteLineAsync("Maze \"<ApiKey>\" [PlayerName] [host] [port] [Maze]*");
+                await Console.Error.WriteLineAsync("Maze \"<ApiKey>\" [PlayerName] [host] [Maze]*");
                 return;
             }
 			
-			var mazeNames = args.Skip(4).ToHashSet();
+			var mazeNames= args.Skip(3).Select(name => name.ToLowerInvariant()).ToHashSet();
             var serverHost = args.Skip(2).FirstOrDefault() ?? "maze.hightechict.nl";
             var apiKey = args.FirstOrDefault() ?? throw new Exception("Key?");
             var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
 
-            Console.WriteLine($"Connecting to {serverHost}:{serverPort} with key '{apiKey}'; nickname {ourName}");
-            var channel = new Channel(serverHost, serverPort, ChannelCredentials.Insecure);
+            Console.Error.WriteLine($"Connecting to {serverHost} with key '{apiKey}'; nickname {ourName}");
+            var httpClient = new System.Net.Http.HttpClient();
+            httpClient.DefaultRequestHeaders.Add("Authorization", apiKey);
+            var client = new CountingClient(new AmazeingClient(serverHost, httpClient));
 
-            _grpcCallOptions = new CallOptions(new Metadata { { "Authorization", apiKey } });
-
-            var playerClient = new Player.PlayerClient(channel);
-            var mazesClient = new Mazes.MazesClient(channel);
-            var mazeClient = new AmazeingEvening.Maze.MazeClient(channel);
-            await MakeRequest(playerClient.ForgetMeAsync, new ForgetMeRequest());
-            Console.WriteLine("Forgot myself");
+            await client.ForgetPlayer();
+            Console.Error.WriteLine("Forgot myself");
 
             // Register ourselves
-            var registerResult = await MakeRequest(playerClient.RegisterAsync, new RegisterRequest { Name = ourName });
-            Console.WriteLine($"Registration result: [{registerResult.Result}]");
-            
-            // Do the Konami Move
-            await DoTheKonami(mazeClient);
-
-            var mazeProxy = new SimpleMazeClient(mazeClient, _grpcCallOptions);
+            await client.RegisterPlayer(ourName);            
             
             // List all the available mazes
-            var availableMazes = (await
-				MakeRequest(mazesClient.GetAllAvailableMazesAsync, new GetAllAvailableMazesRequest()))
-				.AvailableMazes
-				.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles)
-				.ToList();
-			foreach( var m in availableMazes)
-			{
-				Console.WriteLine(m.Name);
-			}
-			var selectedMazes = mazeNames.Any()
-			  ? availableMazes.Where(m => mazeNames.Contains(m.Name)).ToList()
-			  : availableMazes;
-            foreach (var maze in selectedMazes)
+            var availableMazes = (await client.AllMazes())
+				.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles);
+			
+            var overhead = client.Invocations;
+            
+            foreach (var maze in availableMazes)
             {
-                Console.WriteLine(
-                    $"Maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
-                await new MazeSolver(mazeProxy, maze).Solve();
+                var doing = !mazeNames.Any() || mazeNames.Contains(maze.Name.ToLowerInvariant());
+                Console.Error.WriteLine(
+                    $"{(doing?"Doing":"Skipping")} maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
+                if (!doing)
+                    continue;
+                var baseInvocations = client.Invocations;
+                await new MazeSolver(client, maze).Solve();
+                Console.WriteLine($"{maze.Name}, {client.Invocations - baseInvocations}");
+            }
+            
+            // Do the Konami Move
+            if (!mazeNames.Any())
+            {
+                var baseInvocations = client.Invocations;
+                await DoTheKonami(client);
+                Console.WriteLine($"Easter Egg, {client.Invocations - baseInvocations}");
             }
 
-            await channel.ShutdownAsync();
+            Console.WriteLine($"Registration, {overhead}");
+            Console.WriteLine($"Total, {client.Invocations}");
         }
 
-        private static async Task DoTheKonami(AmazeingEvening.Maze.MazeClient mazeClient)
+        private static async Task DoTheKonami(IAmazeingClient mazeClient)
         {
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Up}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Up}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Down}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Down}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Left}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Right}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Left}, _grpcCallOptions);
-            await mazeClient.MoveAsync(new MoveRequest {Direction = MoveDirection.Right}, _grpcCallOptions);
+            try{ await mazeClient.Move(Direction.Up);} catch { }
+            try{ await mazeClient.Move(Direction.Up);} catch { }
+            try{ await mazeClient.Move(Direction.Down);} catch { }
+            try{ await mazeClient.Move(Direction.Down);} catch { }
+            try{ await mazeClient.Move(Direction.Left);} catch { }
+            try{ await mazeClient.Move(Direction.Right);} catch { }
+            try{ await mazeClient.Move(Direction.Left);} catch { }
+            try{ await mazeClient.Move(Direction.Right);} catch { }
         }
     }
 }
