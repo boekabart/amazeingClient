@@ -16,7 +16,7 @@ namespace Maze
                 return;
             }
 			
-			var mazeNames = args.Skip(3).ToHashSet();
+			var mazeNames= args.Skip(3).Select(name => name.ToLowerInvariant()).ToHashSet();
             var serverHost = args.Skip(2).FirstOrDefault() ?? "maze.hightechict.nl";
             var apiKey = args.FirstOrDefault() ?? throw new Exception("Key?");
             var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
