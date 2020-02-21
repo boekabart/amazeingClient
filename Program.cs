@@ -34,23 +34,18 @@ namespace Maze
             
             // List all the available mazes
             var availableMazes = (await client.AllMazes())
-				.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles)
-				.ToList();
-			foreach( var m in availableMazes)
-			{
-				Console.WriteLine(m.Name);
-			}
-			var selectedMazes = mazeNames.Any()
-			  ? availableMazes.Where(m => mazeNames.Contains(m.Name)).ToList()
-			  : availableMazes;
-
+				.OrderByDescending(maze => (double)maze.PotentialReward / maze.TotalTiles);
+			
             var overhead = client.Invocations;
             
-            foreach (var maze in selectedMazes)
+            foreach (var maze in availableMazes)
             {
-                var baseInvocations = client.Invocations;
+                var doing = !mazeNames.Any() || mazeNames.Contains(maze.Name.ToLowerInvariant());
                 Console.Error.WriteLine(
-                    $"Doing maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
+                    $"{(doing?"Doing":"Skipping")} maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
+                if (!doing)
+                    continue;
+                var baseInvocations = client.Invocations;
                 await new MazeSolver(client, maze).Solve();
                 Console.WriteLine($"{maze.Name}, {client.Invocations - baseInvocations}");
             }
