@@ -21,13 +21,13 @@ namespace Maze
             var apiKey = args.FirstOrDefault() ?? throw new Exception("Key?");
             var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
 
-            Console.WriteLine($"Connecting to {serverHost} with key '{apiKey}'; nickname {ourName}");
+            Console.Error.WriteLine($"Connecting to {serverHost} with key '{apiKey}'; nickname {ourName}");
             var httpClient = new System.Net.Http.HttpClient();
             httpClient.DefaultRequestHeaders.Add("Authorization", apiKey);
-            var client = new AmazeingClient(serverHost, httpClient);
+            var client = new CountingClient(new AmazeingClient(serverHost, httpClient));
 
             await client.ForgetPlayer();
-            Console.WriteLine("Forgot myself");
+            Console.Error.WriteLine("Forgot myself");
 
             // Register ourselves
             await client.RegisterPlayer(ourName);            
@@ -43,18 +43,31 @@ namespace Maze
 			var selectedMazes = mazeNames.Any()
 			  ? availableMazes.Where(m => mazeNames.Contains(m.Name)).ToList()
 			  : availableMazes;
+
+            var overhead = client.Invocations;
+            
             foreach (var maze in selectedMazes)
             {
-                Console.WriteLine(
-                    $"Maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
+                var baseInvocations = client.Invocations;
+                Console.Error.WriteLine(
+                    $"Doing maze [{maze.Name}] | Total tiles: [{maze.TotalTiles}] | Potential reward: [{maze.PotentialReward}]");
                 await new MazeSolver(client, maze).Solve();
+                Console.WriteLine($"{maze.Name}, {client.Invocations - baseInvocations}");
             }
             
             // Do the Konami Move
-            await DoTheKonami(client);
+            if (!mazeNames.Any())
+            {
+                var baseInvocations = client.Invocations;
+                await DoTheKonami(client);
+                Console.WriteLine($"Easter Egg, {client.Invocations - baseInvocations}");
+            }
+
+            Console.WriteLine($"Registration, {overhead}");
+            Console.WriteLine($"Total, {client.Invocations}");
         }
 
-        private static async Task DoTheKonami(AmazeingClient mazeClient)
+        private static async Task DoTheKonami(IAmazeingClient mazeClient)
         {
             try{ await mazeClient.Move(Direction.Up);} catch { }
             try{ await mazeClient.Move(Direction.Up);} catch { }
