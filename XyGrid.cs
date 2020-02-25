@@ -200,39 +200,39 @@ namespace Maze
             return rewardDictionary.TryGetValue(CurrentLocation, out var info)? info.Direction:(Direction?) null;
         }
 
-        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateRewardRoutes((int X, int Y) location)
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateRewardRoutes(
+            (int X, int Y) location)
         {
-            return _rewardDictionary = _rewardDictionary?.ContainsKey(location) ?? false
-                ? _rewardDictionary
-                : PopulateShortestPathDictionary(_dick.Where(d => d.Value.Reward)
-                        .Select(d => d.Key)
-                        .ToList(), CurrentLocation);
+            return _rewardDictionary = UpdateForLocation(_rewardDictionary, location)
+                                    ?? PopulateShortestPathDictionary(_dick.Where(d => d.Value.Reward)
+                                           .Select(d => d.Key)
+                                           .ToList(), CurrentLocation, null);
         }
 
-        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateUnvisitedRoutes((int X, int Y) location)
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateUnvisitedRoutes(
+            (int X, int Y) location)
         {
-            return _unvisitedDictionary = _unvisitedDictionary?.ContainsKey(location) ?? false
-                ? _unvisitedDictionary
-                : PopulateShortestPathDictionary(_dick.Where(d => !d.Value.IsVisited)
-                    .Select(d => d.Key)
-                    .ToList(), CurrentLocation);
+            return _unvisitedDictionary = UpdateForLocation(_unvisitedDictionary, location)
+                                    ?? PopulateShortestPathDictionary(_dick.Where(d => !d.Value.IsVisited)
+                                              .Select(d => d.Key)
+                                              .ToList(), CurrentLocation, null);
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateExitRoutes()
         {
-            return _exitDictionary = _exitDictionary ??
-                                     PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsExit)
-                    .Select(d => d.Key)
-                    .ToList(), null);
+            return _exitDictionary = _exitDictionary
+                                     ?? PopulateShortestPathDictionary(_dick.Where(d => d.Value.IsExit)
+                                         .Select(d => d.Key)
+                                         .ToList(), null, null);
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateCollectionRoutes()
         {
-            return _collectionPointDictionary = _collectionPointDictionary?.ContainsKey(CurrentLocation) ?? false
-                ? _collectionPointDictionary
-                : PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsCollectionPoint)
-                    .Select(d => d.Key)
-                    .ToList(), CurrentLocation, true);
+            return _collectionPointDictionary = UpdateForLocation(_collectionPointDictionary, CurrentLocation)
+                                                ?? PopulateShortestPathDictionary(_dick
+                                                    .Where(d => d.Value.IsCollectionPoint)
+                                                    .Select(d => d.Key)
+                                                    .ToList(), CurrentLocation, UpdateExitRoutes());
         }
 
         public Direction? ShortestPathToCollectionPoint()
@@ -261,11 +261,16 @@ namespace Maze
             return routes[CurrentLocation].Direction;
         }
 
-        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets, (int X, int Y)? referenceLocation, bool basedOnExit = false)
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets, (int X, int Y)? location, Dictionary<(int X, int Y), (int Distance, Direction Direction)> basedOn)
         {
-            var routes= basedOnExit ? InitRoutes(targets, UpdateExitRoutes()) : InitRoutes(targets);
-            var toDo = new Queue<(int X, int Y)>(targets);
+            var routes= basedOn != null ? InitRoutes(targets, basedOn) : InitRoutes(targets);
+            return ExpandDistances(location, targets, routes);
+        }
 
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> ExpandDistances(
+            (int X, int Y)? location, IEnumerable<(int X, int Y)> pointsToCheck, Dictionary<(int X, int Y), (int Distance, Direction Direction)> routes)
+        {
+            var toDo = new Queue<(int X, int Y)>(pointsToCheck);
             var bestSoFar = int.MaxValue - 1;
             while (toDo.Any())
             {
@@ -285,7 +290,7 @@ namespace Maze
                     }
 
                     routes[p2] = (newDist, dir.Reversed());
-                    if (referenceLocation != null && p2 == referenceLocation)
+                    if (location != null && p2 == location)
                         bestSoFar = newDist;
 
                     toDo.Enqueue(p2);
@@ -294,6 +299,16 @@ namespace Maze
 
             return routes;
         }
+
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateForLocation(
+            Dictionary<(int X, int Y), (int Distance, Direction Direction)> collectionPointDictionary,
+            (int X, int Y) currentLocation)
+        {
+            return collectionPointDictionary?.ContainsKey(currentLocation) ?? true
+                ? collectionPointDictionary
+                : ExpandDistances(currentLocation, collectionPointDictionary.Keys, collectionPointDictionary);
+        }
+
 
         private static Dictionary<(int X, int Y), (int Distance, Direction Direction)> InitRoutes(IReadOnlyCollection<(int X, int Y)> targets)
         {
