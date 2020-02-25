@@ -244,11 +244,17 @@ namespace Maze
                 .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
                 .ThenByDescending(UnvisitedPotential) 
                 //.ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
+                .ThenBy(GoStraight) // Go Straight!
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, _lastDir))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
                 .FirstOrDefault();
             return mostUsefulDir;
+        }
+
+        private bool GoStraight(MoveAction ma)
+        {
+            return _lastDir.HasValue && _lastDir != ma.Direction;
         }
 
         private int UnvisitedPotential(MoveAction ma)
