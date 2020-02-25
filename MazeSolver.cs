@@ -148,6 +148,13 @@ namespace Maze
         {
             while (options.CurrentScoreInHand + options.CurrentScoreInBag < _maze.PotentialReward)
             {
+                var mostUsefulDirection = MostUsefulDirForCollecting(options, _crawlCrumbs);
+                if (mostUsefulDirection != null)
+                {
+                    options = await MakeMove(mostUsefulDirection.Direction);
+                    continue;
+                }
+                
                 var shortestPath = _xyGrid.ShortestPathToReward();
                 if (shortestPath.HasValue)
                 {
@@ -158,13 +165,6 @@ namespace Maze
                     }
                     options = await MakeMove(shortestPath.Value);
 
-                    continue;
-                }
-                
-                var mostUsefulDirection = MostUsefulDirForCollecting(options, _crawlCrumbs);
-                if (mostUsefulDirection != null)
-                {
-                    options = await MakeMove(mostUsefulDirection.Direction);
                     continue;
                 }
                 
@@ -265,14 +265,28 @@ namespace Maze
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
-                //.ThenBy(ma => _xyGrid.SeenTile(ma.Direction)) // Un-prefer tiles I've seen and apparently didn't visit.. for a reason?
-                .ThenByDescending(ma => _xyGrid.HasIslandNeighbor(ma.Direction)) // prefer tiles that will lead to completion of an unknown island
-                .ThenByDescending(ma => _xyGrid.UnvisitedPotential(ma.Direction)) 
+                .ThenBy(ma => _xyGrid.DistanceToReward(ma))
+                .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
+                .ThenByDescending(UnvisitedPotential) 
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
                 .FirstOrDefault();
             return mostUsefulDir;
+        }
+
+        private int UnvisitedPotential(MoveAction ma)
+        {
+            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
+            return ma.RewardOnDestination != 0
+                ? 0
+                : _xyGrid.UnvisitedPotential(ma.Direction);
+        }
+
+        private bool HasIslandNeighbour(MoveAction ma)
+        {
+            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
+            return ma.RewardOnDestination != 0 || _xyGrid.HasIslandNeighbor(ma.Direction);
         }
 
         private static MoveAction MostUsefulDirForLocatingCollectionPoint(PossibleActionsAndCurrentScore options,

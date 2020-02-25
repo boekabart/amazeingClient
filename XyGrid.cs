@@ -106,16 +106,19 @@ namespace Maze
             Console.SetCursorPosition(1 + CurrentLocation.X - offsetX, 1 + offsetY - CurrentLocation.Y);
         }
 
-        public void DrawCollection() => Draw(_collectionPointDictionary);
-        public void DrawExit() => Draw(_exitDictionary);
-        public void Draw(Dictionary<(int X, int Y),(int Distance, Direction dir)> dick)
+        public bool DrawCollection() => Draw(UpdateCollectionRoutes());
+        public bool DrawExit() => Draw(UpdateExitRoutes());
+        public bool DrawReward() => Draw(UpdateRewardRoutes(CurrentLocation));
+        public bool Draw(Dictionary<(int X, int Y),(int Distance, Direction dir)> dick)
         {
+            Console.Clear();
+            if (!dick.Any())
+                return false;
             var offsetX = dick.Keys.Min(xy => xy.X);
             var offsetY = dick.Keys.Max(xy => xy.Y);
-            Console.Clear();
             foreach (var kvp in dick)
             {
-                var x = 1 + 3*(kvp.Key.X - offsetX);
+                var x = 3*(kvp.Key.X - offsetX);
                 var y = 1 + offsetY - kvp.Key.Y;
                 
                 Console.SetCursorPosition(x, y);
@@ -123,8 +126,8 @@ namespace Maze
                 //Console.ForegroundColor = tile.IsVisited ? ConsoleColor.White : ConsoleColor.DarkGray;
                 Console.Error.Write( $"{tile.Distance}");
             }
-            Console.SetCursorPosition(2 + 3*(CurrentLocation.X - offsetX), 1 + offsetY - CurrentLocation.Y);
-            Console.ReadKey(true);
+            Console.SetCursorPosition(0, 4 + offsetY - dick.Keys.Min(xy => xy.Y));
+            return true;
         }
 
         public (int X, int Y) CurrentLocation { get; private set; }
@@ -145,6 +148,26 @@ namespace Maze
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _exitDictionary;
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _collectionPointDictionary;
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _rewardDictionary;
+
+        public int DistanceToReward(MoveAction ma)
+        {
+            if (HasInvalidState)
+                return int.MaxValue;
+
+            if (ma.RewardOnDestination > 0)
+                return 0;
+
+            var location = Moved(ma.Direction);
+            var rewardDictionary = UpdateRewardRoutes(CurrentLocation);
+
+            if (!rewardDictionary.TryGetValue(location, value: out var info))
+            {
+                //Console.WriteLine($"No idea {ma.Direction} {location.X} {location.Y}");
+                return int.MaxValue;
+            }
+            //Console.WriteLine($"{info.Distance} @ {ma.Direction} {location.X} {location.Y}");
+                return info.Distance;
+        }
 
         public Direction? ShortestPathToReward()
         {
@@ -211,39 +234,41 @@ namespace Maze
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets)
         {
-            var dick = targets.ToDictionary(pos => pos, _ => (0, Direction.Down));
+            var routes = InitRoutes(targets);
             var toDo = new Queue<(int X, int Y)>(targets);
 
-            var bestSoFar = int.MaxValue;
+            var bestSoFar = int.MaxValue - 1;
             while (toDo.Any())
             {
                 var pos = toDo.Dequeue();
-                var soFar = dick[pos].Item1;
+                var soFar = routes[pos].Distance;
                 var tile = _dick[pos];
                 var newDist = soFar + 1;
-                if (newDist >= bestSoFar)
+                if (newDist > bestSoFar + 1)
                     break;
                 foreach (var dir in tile.PossibleDirections)
                 {
                     var p2 = pos.Moved(dir);
-                    if (dick.TryGetValue(p2, out var t2))
+                    if (routes.TryGetValue(p2, out var t2))
                     {
-                        if (t2.Item1 <= newDist)
+                        if (t2.Distance <= newDist)
                             continue;
                     }
 
-                    dick[p2] = (newDist, dir.Reversed());
+                    routes[p2] = (newDist, dir.Reversed());
                     if (p2 == CurrentLocation)
-                    {
                         bestSoFar = newDist;
-                        break;
-                    }
 
                     toDo.Enqueue(p2);
                 }
             }
 
-            return dick;
+            return routes;
+        }
+
+        private static Dictionary<(int X, int Y), (int Distance, Direction Direction)> InitRoutes(IReadOnlyCollection<(int X, int Y)> targets)
+        {
+            return targets.ToDictionary(pos => pos, _ => (0, Direction.Down));
         }
 
         private (int X, int Y) TrackBack(ImmutableStack<Direction> trail)
