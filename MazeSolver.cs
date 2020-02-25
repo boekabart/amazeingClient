@@ -92,6 +92,14 @@ namespace Maze
 
         private async Task<PossibleActionsAndCurrentScore> CollectScoreInHand(PossibleActionsAndCurrentScore options)
         {
+            if (false && Global.IsInteractive)
+            {
+                _xyGrid.Draw($"Ready To Collect");
+                Console.ReadKey(true);
+                _xyGrid.DrawCollection();
+                Console.ReadKey(true);
+            }
+
             while (options.CurrentScoreInHand != 0)
             {
                 if (options.CanCollectScoreHere)
@@ -105,6 +113,8 @@ namespace Maze
                 {
                     if (false && Global.IsInteractive)
                     {
+                        _xyGrid.DrawCollection();
+                        Console.ReadKey(true);
                         _xyGrid.Draw($"Direction to collection point: {shortestPath.Value}");
                         Console.ReadKey(true);
                     }

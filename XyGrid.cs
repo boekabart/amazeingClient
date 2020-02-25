@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Maze
 {
@@ -11,7 +12,7 @@ namespace Maze
         {
             protected bool Equals(Tile other)
             {
-                return IsExit == other.IsExit && IsCollectionPoint == other.IsCollectionPoint && IsVisited == other.IsVisited && Equals(PossibleDirections, other.PossibleDirections) && Reward == other.Reward;
+                return IsExit == other.IsExit && IsCollectionPoint == other.IsCollectionPoint && IsVisited == other.IsVisited && Equals(PossibleDirections, other.PossibleDirections) && Reward == other.Reward && portal == other.portal;
             }
 
             public override bool Equals(object obj)
@@ -32,6 +33,16 @@ namespace Maze
             public bool IsVisited { get; }
             public ImmutableHashSet<Direction> PossibleDirections { get; }
             public bool Reward { get; private set; }
+            private (int X, int Y)? portal;
+            public (int X, int Y) Portal => portal.Value;
+            public bool IsPortal => portal != null;
+
+            public Tile(Tile realTile, (int X, int Y) portal)
+            {
+                IsVisited = realTile.IsVisited;
+                PossibleDirections = realTile.PossibleDirections;
+                this.portal = portal;
+            }
 
             public Tile(PossibleActionsAndCurrentScore currentLocation)
             {
@@ -98,10 +109,11 @@ namespace Maze
                 
                 Console.SetCursorPosition(x, y);
                 var tile = kvp.Value;
-                Console.ForegroundColor = tile.IsVisited ? ConsoleColor.White : ConsoleColor.DarkGray;
-                var teken =tile.IsVisited ? "X": 
+                Console.ForegroundColor = tile.IsPortal? ConsoleColor.Cyan : tile.IsVisited ? ConsoleColor.White : ConsoleColor.DarkGray;
+                var teken= tile.IsPortal ? "*":tile.IsVisited ? "X": 
                     (HasIslandNeighbor(kvp.Key)?"!":UnvisitedPotential(kvp.Key).ToString());
                 Console.Error.Write( $"{teken}");
+                Console.ForegroundColor = ConsoleColor.Gray;
             }
             Console.SetCursorPosition(1 + CurrentLocation.X - offsetX, 1 + offsetY - CurrentLocation.Y);
         }
@@ -158,7 +170,7 @@ namespace Maze
             if (ma.RewardOnDestination > 0)
                 return 0;
 
-            var location = Moved(ma.Direction);
+            var location = RelativeLocation(ma.Direction);
             var rewardDictionary = UpdateRewardRoutes(CurrentLocation);
 
             if (!rewardDictionary.TryGetValue(location, value: out var info))
@@ -170,6 +182,19 @@ namespace Maze
                 return info.Distance;
         }
 
+        private (int X, int Y) RelativeLocation(Direction direction)
+        {
+            return RelativeLocation(CurrentLocation, direction);
+        }
+
+        private (int X, int Y) RelativeLocation((int X, int Y) location, Direction direction)
+        {
+            var newLocation = location.Moved(direction);
+            if (_dick.TryGetValue(newLocation, out var tile) && tile.IsPortal)
+                return tile.Portal;
+            return newLocation;
+        }
+
         public int DistanceToUnvisited(MoveAction ma)
         {
             if (HasInvalidState)
@@ -178,7 +203,7 @@ namespace Maze
             if (!ma.HasBeenVisited)
                 return 0;
 
-            var location = Moved(ma.Direction);
+            var location = RelativeLocation(ma.Direction);
             var unvisitedRoutes = UpdateUnvisitedRoutes(CurrentLocation);
 
             if (!unvisitedRoutes.TryGetValue(location, value: out var info))
@@ -270,8 +295,13 @@ namespace Maze
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> ExpandDistances(
             (int X, int Y)? location, IEnumerable<(int X, int Y)> pointsToCheck, Dictionary<(int X, int Y), (int Distance, Direction Direction)> routes)
         {
+            //Draw("Test");
+            //Console.SetCursorPosition(0, 15);
             var toDo = new Queue<(int X, int Y)>(pointsToCheck);
             var bestSoFar = int.MaxValue - 1;
+            //Console.Error.WriteLine("=");
+            //foreach(var t in toDo) Console.Error.WriteLine(t);
+            //Console.Error.WriteLine("-");
             while (toDo.Any())
             {
                 var pos = toDo.Dequeue();
@@ -282,7 +312,7 @@ namespace Maze
                     break;
                 foreach (var dir in tile.PossibleDirections)
                 {
-                    var p2 = pos.Moved(dir);
+                    var p2 = RelativeLocation(pos, dir);
                     if (routes.TryGetValue(p2, out var t2))
                     {
                         if (t2.Distance <= newDist)
@@ -294,6 +324,7 @@ namespace Maze
                         bestSoFar = newDist;
 
                     toDo.Enqueue(p2);
+                    //Console.Error.WriteLine(p2);
                 }
             }
 
@@ -324,23 +355,11 @@ namespace Maze
             return targets.ToDictionary(pos => pos, pos => exitRoutes[pos]);
         }
 
-        private (int X, int Y) TrackBack(ImmutableStack<Direction> trail)
-        {
-            var whereTo = CurrentLocation;
-            while (!trail.IsEmpty)
-            {
-                trail = trail.Pop(out var stepTaken);
-                whereTo = whereTo.Moved(stepTaken.Reversed());
-            }
-
-            return whereTo;
-        }
-
-        public int UnvisitedPotential(Direction dir) => UnvisitedPotential(Moved(dir));
+        public int UnvisitedPotential(Direction dir) => UnvisitedPotential(RelativeLocation(dir));
 
         private int UnvisitedPotential((int X, int Y) pos) => HasInvalidState?0:Extensions.AllDirections.Select(d => pos.Moved(d)).Max(HowManyUnknownNeighbours);
 
-        public int HowManyUnknownNeighbours(Direction dir) => HowManyUnknownNeighbours(Moved(dir));
+        public int HowManyUnknownNeighbours(Direction dir) => HowManyUnknownNeighbours(RelativeLocation(dir));
         private int HowManyUnknownNeighbours((int X, int Y) pos)
         {
             return HasInvalidState ? 0 : Extensions.AllDirections
@@ -348,7 +367,7 @@ namespace Maze
                 .Count(p => !_dick.ContainsKey(p));
         }
 
-        public bool HasIslandNeighbor(Direction dir) => HasIslandNeighbor(Moved(dir));
+        public bool HasIslandNeighbor(Direction dir) => HasIslandNeighbor(RelativeLocation(dir));
 
         private bool HasIslandNeighbor((int X, int Y) pos)
         {
@@ -365,6 +384,11 @@ namespace Maze
             Tile newTile;
             if (_dick.TryGetValue(CurrentLocation, out Tile previousState))
             {
+                if (previousState.IsPortal)
+                {
+                    Console.Error.WriteLine("What? How did I get on a portal?");
+                    return false;
+                }
                 var newTile1 = new Tile(options);
                 if (previousState.IsExit != newTile1.IsExit
                     || previousState.IsCollectionPoint != newTile1.IsCollectionPoint)
@@ -416,15 +440,58 @@ namespace Maze
             return true;
         }
 
+        private bool _dickTryGetValue((int X, int Y) location, out Tile tile)
+        {
+            if (!_dick.TryGetValue(location, out tile))
+                return false;
+            if (tile.IsPortal)
+                tile = _dick[tile.Portal];
+            return true;
+        }
+
         private bool UpdateNext(MoveAction moveAction)
         {
-            var location = Moved(moveAction.Direction);
-            var newTile = _dick.TryGetValue(location, out Tile previousState)
-                ? Tile.TryMerge(moveAction, previousState)
-                : moveAction.HasBeenVisited
-                    ? new Tile(moveAction) // HEY! That was unexpected!? Portal detected!!
-                    : new Tile(moveAction);
-            
+            var location = RelativeLocation(moveAction.Direction);
+            Tile newTile;
+            if (_dickTryGetValue(location, out Tile previousState))
+            {
+                if (previousState.IsPortal)
+                    return true; // Visited, so must be OK
+                    //previousState = _dick[previousState.Portal];
+                
+                if (moveAction.AllowsExit != previousState.IsExit
+                    || moveAction.AllowsScoreCollection != previousState.IsCollectionPoint
+                    /*|| moveAction.HasBeenVisited != previousKnownState.IsVisited*/) // HEY, loop detection
+                    newTile = null;
+                else
+                {
+                    newTile = new Tile(moveAction, previousState.PossibleDirections);
+                }
+            }
+            else if (moveAction.HasBeenVisited) // Loop!
+            {
+                var realLocation = FindPortalEnd(moveAction.Direction);
+                previousState = _dick[realLocation];
+
+                Console.Error.WriteLine($"Portal detected {moveAction.Direction} at {location.X}, {location.Y} => {realLocation.X}, {realLocation.Y}");
+
+                if (moveAction.AllowsExit != previousState.IsExit
+                    || moveAction.AllowsScoreCollection != previousState.IsCollectionPoint)
+                {
+                    Console.Error.WriteLine($"Portal broken");
+                    newTile = null;
+                }
+                else
+                {
+                    newTile = new Tile(previousState, realLocation);
+                    _dick[realLocation.Moved(moveAction.Direction.Reversed())] = new Tile(_dick[CurrentLocation], CurrentLocation);
+                }
+            }
+            else
+            {
+                newTile = new Tile(moveAction);
+            }
+
             if (newTile == null)
             {
                 if (HasInvalidState) return false;
@@ -453,8 +520,39 @@ namespace Maze
             return true;
         }
 
-        private (int X, int Y) Moved(Direction dir) => CurrentLocation.Moved(dir);
+        private (int X, int Y) FindPortalEnd(Direction moveActionDirection)
+        {
+            switch (moveActionDirection)
+            {
+                case Direction.Left:
+                    return _dick.Where(k => k.Key.Y == CurrentLocation.Y)
+                        .Where(k => k.Value.IsVisited)
+                        .OrderByDescending(k => k.Key.X).First().Key;
+                case Direction.Right:
+                    return _dick.Where(k => k.Key.Y == CurrentLocation.Y)
+                        .Where(k => k.Value.IsVisited)
+                        .OrderBy(k => k.Key.X).First().Key;
+                case Direction.Up:
+                    return _dick.Where(k => k.Key.X == CurrentLocation.X)
+                        .Where(k => k.Value.IsVisited)
+                        .OrderBy(k => k.Key.Y).First().Key;
+                case Direction.Down:
+                default:
+                    return _dick.Where(k => k.Key.X == CurrentLocation.X)
+                        .Where(k => k.Value.IsVisited)
+                        .OrderByDescending(k => k.Key.Y).First().Key;
+            }
+        }
 
-        public void RegisterMove(Direction dir) => CurrentLocation = Moved(dir);
+        public void RegisterMove(Direction dir)
+        {
+            var newLocation = CurrentLocation.Moved(dir);
+            if (_dick.TryGetValue(newLocation, out var tile) && tile.IsPortal)
+            {
+                newLocation = tile.Portal;
+                Console.Error.WriteLine($"Went {dir} through Portal from {CurrentLocation.X},{CurrentLocation.Y} to {newLocation.X},{newLocation.Y}");
+            }
+            CurrentLocation = newLocation;
+        }
     }
 }
