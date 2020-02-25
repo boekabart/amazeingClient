@@ -9,6 +9,24 @@ namespace Maze
     {
         internal class Tile
         {
+            protected bool Equals(Tile other)
+            {
+                return IsExit == other.IsExit && IsCollectionPoint == other.IsCollectionPoint && IsVisited == other.IsVisited && Equals(PossibleDirections, other.PossibleDirections) && Reward == other.Reward;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (ReferenceEquals(null, obj)) return false;
+                if (ReferenceEquals(this, obj)) return true;
+                if (obj.GetType() != this.GetType()) return false;
+                return Equals((Tile) obj);
+            }
+
+            public override int GetHashCode()
+            {
+                return HashCode.Combine(IsExit, IsCollectionPoint, IsVisited, PossibleDirections, Reward);
+            }
+
             public bool IsExit { get; }
             public bool IsCollectionPoint { get; }
             public bool IsVisited { get; }
@@ -265,11 +283,32 @@ namespace Maze
 
         private bool UpdateCurrent(PossibleActionsAndCurrentScore options)
         {
-            _rewardDictionary = null;
-            var newTile = _dick.TryGetValue(CurrentLocation, out Tile previousState)
-                ? Tile.TryMerge(options, previousState)
-                : new Tile(options);
-            
+            Tile newTile;
+            if (_dick.TryGetValue(CurrentLocation, out Tile previousState))
+            {
+                var newTile1 = new Tile(options);
+                if (previousState.IsExit != newTile1.IsExit
+                    || previousState.IsCollectionPoint != newTile1.IsCollectionPoint)
+                    newTile = null;
+                else
+                {
+                    if (previousState.IsVisited)
+                    {
+                        newTile = Tile.Match(previousState.PossibleDirections, newTile1.PossibleDirections)
+                            ? previousState
+                            : null;
+                    }
+                    else
+                    {
+                        newTile = previousState.PossibleDirections.All(newTile1.PossibleDirections.Contains) ? newTile1 : null;
+                    }
+
+                    // From NOT visited to visited
+                }
+            }
+            else
+                newTile = new Tile(options);
+
             if (newTile == null)
             {
                 if (HasInvalidState) return false;
@@ -285,13 +324,21 @@ namespace Maze
                 return false;
             }
 
+            if (newTile.Equals(previousState))
+            {
+                Console.Error.WriteLine("Same");
+                return true;
+            }
+            Console.Error.WriteLine("Diff");
+
+            _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
+
             _dick[CurrentLocation] = newTile;
             return true;
         }
 
         private bool UpdateNext(MoveAction moveAction)
         {
-            _rewardDictionary = null;
             var location = Moved(moveAction.Direction);
             var newTile = _dick.TryGetValue(location, out Tile previousState)
                 ? Tile.TryMerge(moveAction, previousState)
@@ -315,6 +362,14 @@ namespace Maze
                 return false;
             }
 
+            if (newTile.Equals(previousState))
+            {
+                Console.Error.WriteLine("Same");
+                return true;
+            }
+            Console.Error.WriteLine("Diff");
+
+            _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
             _dick[location] = newTile;
             return true;
         }

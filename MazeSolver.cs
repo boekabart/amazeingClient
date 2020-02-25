@@ -35,7 +35,7 @@ namespace Maze
                 // Looking for exit!
                 if (options.CanExitMazeHere)
                 {
-                    if (Global.IsInteractive)
+                    if (false && Global.IsInteractive)
                     {
                         _xyGrid.Draw("Finished");
                         Console.ReadKey();
