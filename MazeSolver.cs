@@ -260,12 +260,14 @@ namespace Maze
         {
             var mostUsefulDir = options
                 .PossibleMoveActions
-                .Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
-                .OrderBy(_ => 1)
+                //.Where(ma => !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
+                //.OrderBy(_ => 1)
+                .OrderBy(ma => ma.HasBeenVisited) // Prefer mainly to boldly go where no-one, etc
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
-                //.ThenBy(ma => _xyGrid.DistanceToReward(ma)) // That never helps for unvisited tiles. same as previous line...
+                .ThenBy(ma => _xyGrid.DistanceToReward(ma)) // Never helps for unvisited tiles. same as previous line...
+                //.ThenBy(ma => _xyGrid.DistanceToUnvisited(ma)) // Instead of backtracking?
                 .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
                 .ThenByDescending(UnvisitedPotential) 
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
