@@ -243,6 +243,7 @@ namespace Maze
                 .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma)) // Instead of backtracking?
                 .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
                 .ThenByDescending(UnvisitedPotential) 
+                //.ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, _lastDir))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
@@ -297,6 +298,16 @@ namespace Maze
         static int HugTheLeftWall(Direction possibleDirection, Direction incomingDirection)
         {
             return (5 + possibleDirection - incomingDirection) % 4;
+        }
+
+        private static int HugTheRightWall(Direction possibleDirection, Direction? incomingDirection)
+        {
+            return !incomingDirection.HasValue ? 0 : HugTheRightWall(possibleDirection, incomingDirection.Value);
+        }
+
+        static int HugTheRightWall(Direction possibleDirection, Direction incomingDirection)
+        {
+            return (5 + incomingDirection - possibleDirection) % 4;
         }
 
         static void Push(Stack<Direction> stack, Direction dir)
