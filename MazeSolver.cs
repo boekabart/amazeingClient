@@ -148,7 +148,7 @@ namespace Maze
         {
             while (options.CurrentScoreInHand + options.CurrentScoreInBag < _maze.PotentialReward)
             {
-                var shortestPath = _xyGrid.ShortestPathToUnvisitedTileWithReward();
+                var shortestPath = _xyGrid.ShortestPathToReward();
                 if (shortestPath.HasValue)
                 {
                     if (false && Global.IsInteractive)

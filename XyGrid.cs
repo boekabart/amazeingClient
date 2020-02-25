@@ -110,7 +110,8 @@ namespace Maze
         }
 
         public (int X, int Y) CurrentLocation { get; private set; }
-        public bool InvalidState { get; private set; }
+        public bool HasInvalidState { get; private set; }
+        
         public void Register(PossibleActionsAndCurrentScore options)
         {
             if (!UpdateCurrent(options))
@@ -123,59 +124,71 @@ namespace Maze
             }
         }
 
-        public Direction ShortestPathBackTo(ImmutableStack<Direction> trail)
-        {
-            var whereTo = TrackBack(trail);
-            return ShortestPathTo(whereTo);
-        }
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _exitDictionary;
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _collectionPointDictionary;
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _rewardDictionary;
 
-        public Direction ShortestPathTo((int X, int Y) location)
+        public Direction? ShortestPathToReward()
         {
-            throw new NotImplementedException();
-        }
-        
-        public Dictionary<(int X, int Y), (int Distance, Direction Direction)> _exitDictionary = new Dictionary<(int X, int Y), (int Distance, Direction Direction)>();
-        public Dictionary<(int X, int Y), (int Distance, Direction Direction)> _collectionPointDictionary = new Dictionary<(int X, int Y), (int Distance, Direction Direction)>();
-
-        public Direction? ShortestPathToUnvisitedTileWithReward()
-        {
-            if (InvalidState)
-                return null;
-            
-            var _dictionary = PopulateShortestPathDictionary(_dick.Where(d=> !d.Value.IsVisited && d.Value.Reward).Select(d => d.Key).ToList());
-
-            if (!_dictionary.ContainsKey(CurrentLocation))
+            if (HasInvalidState)
                 return null;
 
-            return _dictionary[CurrentLocation].Direction;
+            var rewardDictionary = UpdateRewardRoutes(CurrentLocation);
+
+            return rewardDictionary.TryGetValue(CurrentLocation, out var info)? info.Direction:(Direction?) null;
+        }
+
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateRewardRoutes((int X, int Y) location)
+        {
+            return _rewardDictionary = _rewardDictionary?.ContainsKey(location) ?? false
+                ? _rewardDictionary
+                : PopulateShortestPathDictionary(_dick.Where(d => d.Value.Reward)
+                        .Select(d => d.Key)
+                        .ToList());
+        }
+
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateExitRoutes()
+        {
+            return _exitDictionary = _exitDictionary?.ContainsKey(CurrentLocation) ?? false
+                ? _exitDictionary
+                : PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsExit)
+                    .Select(d => d.Key)
+                    .ToList());
+        }
+
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateCollectionRoutes()
+        {
+            return _collectionPointDictionary = _collectionPointDictionary?.ContainsKey(CurrentLocation) ?? false
+                ? _collectionPointDictionary
+                : PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsCollectionPoint)
+                    .Select(d => d.Key)
+                    .ToList());
         }
 
         public Direction? ShortestPathToCollectionPoint()
         {
-            if (InvalidState)
-                return null;
-            
-            if (!_collectionPointDictionary.ContainsKey(CurrentLocation))
-                _collectionPointDictionary = PopulateShortestPathDictionary(_dick.Where(d => d.Value.IsCollectionPoint).Select(d => d.Key).ToList());
-
-            if (!_collectionPointDictionary.ContainsKey(CurrentLocation))
+            if (HasInvalidState)
                 return null;
 
-            return _collectionPointDictionary[CurrentLocation].Direction;
+            var routes = UpdateCollectionRoutes();
+
+            if (!routes.ContainsKey(CurrentLocation))
+                return null;
+
+            return routes[CurrentLocation].Direction;
         }
 
         public Direction? ShortestPathToExit()
         {
-            if (InvalidState)
-                return null;
-            
-            if (!_exitDictionary.ContainsKey(CurrentLocation))
-                _exitDictionary = PopulateShortestPathDictionary(_dick.Where(d => d.Value.IsExit).Select(d => d.Key).ToList());
-
-            if (!_exitDictionary.ContainsKey(CurrentLocation))
+            if (HasInvalidState)
                 return null;
 
-            return _exitDictionary[CurrentLocation].Direction;
+            var routes = UpdateExitRoutes();
+
+            if (!routes.ContainsKey(CurrentLocation))
+                return null;
+
+            return routes[CurrentLocation].Direction;
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets)
@@ -229,11 +242,11 @@ namespace Maze
 
         public int UnvisitedPotential(Direction dir) => UnvisitedPotential(Moved(dir));
 
-        private int UnvisitedPotential((int X, int Y) pos) => InvalidState?0:Extensions.AllDirections.Select(d => pos.Moved(d)).Max(HowManyUnknownNeighbours);
+        private int UnvisitedPotential((int X, int Y) pos) => HasInvalidState?0:Extensions.AllDirections.Select(d => pos.Moved(d)).Max(HowManyUnknownNeighbours);
 
         private int HowManyUnknownNeighbours((int X, int Y) pos)
         {
-            return InvalidState ? 0 : Extensions.AllDirections
+            return HasInvalidState ? 0 : Extensions.AllDirections
                 .Select(d => pos.Moved(d))
                 .Count(p => !_dick.ContainsKey(p));
         }
@@ -242,7 +255,7 @@ namespace Maze
 
         private bool HasIslandNeighbor((int X, int Y) pos)
         {
-            return !InvalidState && Extensions.AllDirections
+            return !HasInvalidState && Extensions.AllDirections
                        .Select(d => pos.Moved(d))
                        .Where(p => !_dick.ContainsKey(p)) // Unknown location
                        .Any(p => HowManyUnknownNeighbours(p) == 0); // Without any unknown neighbours
@@ -252,13 +265,14 @@ namespace Maze
 
         private bool UpdateCurrent(PossibleActionsAndCurrentScore options)
         {
+            _rewardDictionary = null;
             var newTile = _dick.TryGetValue(CurrentLocation, out Tile previousState)
                 ? Tile.TryMerge(options, previousState)
                 : new Tile(options);
             
             if (newTile == null)
             {
-                if (InvalidState) return false;
+                if (HasInvalidState) return false;
                 var message = $"XY-incompatible maze detected. Conflict with known state at {CurrentLocation.X},{CurrentLocation.Y}.";
                 if (Global.IsInteractive)
                 {
@@ -267,7 +281,7 @@ namespace Maze
                 }
 
                 Console.Error.WriteLine(message);
-                InvalidState = true;
+                HasInvalidState = true;
                 return false;
             }
 
@@ -277,6 +291,7 @@ namespace Maze
 
         private bool UpdateNext(MoveAction moveAction)
         {
+            _rewardDictionary = null;
             var location = Moved(moveAction.Direction);
             var newTile = _dick.TryGetValue(location, out Tile previousState)
                 ? Tile.TryMerge(moveAction, previousState)
@@ -286,7 +301,7 @@ namespace Maze
             
             if (newTile == null)
             {
-                if (InvalidState) return false;
+                if (HasInvalidState) return false;
                 var message =
                     $"XY-incompatible maze detected. Conflict with known state at {location.X},{location.Y} {moveAction.Direction}.";
                 if (Global.IsInteractive)
@@ -296,7 +311,7 @@ namespace Maze
                 }
 
                 Console.Error.WriteLine(message);
-                InvalidState = true;
+                HasInvalidState = true;
                 return false;
             }
 
