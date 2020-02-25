@@ -340,6 +340,7 @@ namespace Maze
 
         private int UnvisitedPotential((int X, int Y) pos) => HasInvalidState?0:Extensions.AllDirections.Select(d => pos.Moved(d)).Max(HowManyUnknownNeighbours);
 
+        public int HowManyUnknownNeighbours(Direction dir) => HowManyUnknownNeighbours(Moved(dir));
         private int HowManyUnknownNeighbours((int X, int Y) pos)
         {
             return HasInvalidState ? 0 : Extensions.AllDirections

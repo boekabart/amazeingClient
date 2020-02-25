@@ -241,7 +241,8 @@ namespace Maze
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
                 .ThenBy(ma => _xyGrid.DistanceToReward(ma)) // Never helps for unvisited tiles. same as previous line...
                 .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma)) // Instead of backtracking?
-                .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
+                //.ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island - Useful for left/right hugging
+                //.ThenByDescending(HowManyUnknownNeighbours) 
                 .ThenByDescending(UnvisitedPotential) 
                 //.ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
                 .ThenBy(GoStraight) // Go Straight!
@@ -255,6 +256,14 @@ namespace Maze
         private bool GoStraight(MoveAction ma)
         {
             return _lastDir.HasValue && _lastDir != ma.Direction;
+        }
+
+        private int HowManyUnknownNeighbours(MoveAction ma)
+        {
+            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
+            return ma.RewardOnDestination != 0
+                ? 0
+                : _xyGrid.HowManyUnknownNeighbours(ma.Direction);
         }
 
         private int UnvisitedPotential(MoveAction ma)
