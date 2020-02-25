@@ -147,6 +147,7 @@ namespace Maze
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _exitDictionary;
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _collectionPointDictionary;
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _unvisitedDictionary;
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> _rewardDictionary;
 
         public int DistanceToReward(MoveAction ma)
@@ -169,6 +170,26 @@ namespace Maze
                 return info.Distance;
         }
 
+        public int DistanceToUnvisited(MoveAction ma)
+        {
+            if (HasInvalidState)
+                return int.MaxValue;
+
+            if (!ma.HasBeenVisited)
+                return 0;
+
+            var location = Moved(ma.Direction);
+            var unvisitedRoutes = UpdateUnvisitedRoutes(CurrentLocation);
+
+            if (!unvisitedRoutes.TryGetValue(location, value: out var info))
+            {
+                //Console.WriteLine($"No idea {ma.Direction} {location.X} {location.Y}");
+                return int.MaxValue;
+            }
+            //Console.WriteLine($"{info.Distance} @ {ma.Direction} {location.X} {location.Y}");
+            return info.Distance;
+        }
+
         public Direction? ShortestPathToReward()
         {
             if (HasInvalidState)
@@ -186,6 +207,15 @@ namespace Maze
                 : PopulateShortestPathDictionary(_dick.Where(d => d.Value.Reward)
                         .Select(d => d.Key)
                         .ToList());
+        }
+
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateUnvisitedRoutes((int X, int Y) location)
+        {
+            return _unvisitedDictionary = _unvisitedDictionary?.ContainsKey(location) ?? false
+                ? _unvisitedDictionary
+                : PopulateShortestPathDictionary(_dick.Where(d => !d.Value.IsVisited)
+                    .Select(d => d.Key)
+                    .ToList());
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateExitRoutes()
@@ -356,7 +386,7 @@ namespace Maze
             }
             //Console.Error.WriteLine($"Diff {CurrentLocation.X},{CurrentLocation.Y}");
 
-            _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
+            _rewardDictionary = _exitDictionary = _collectionPointDictionary = _unvisitedDictionary = null;
 
             _dick[CurrentLocation] = newTile;
             return true;
@@ -394,7 +424,7 @@ namespace Maze
             }
             //Console.Error.WriteLine($"Diff {moveAction.Direction} {location.X},{location.Y}");
 
-            _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
+            _rewardDictionary = _exitDictionary = _collectionPointDictionary = _unvisitedDictionary = null;
             _dick[location] = newTile;
             return true;
         }
