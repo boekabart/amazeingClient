@@ -45,6 +45,20 @@ namespace Maze
                     return;
                 }
 
+                var shortestPath = _xyGrid.ShortestPathToExit();
+                if (shortestPath.HasValue)
+                {
+                    if (Global.IsInteractive)
+                    {
+                        _xyGrid.DrawExit();
+                        _xyGrid.Draw($"Direction to exit point: {shortestPath.Value}");
+                        Console.ReadKey(true);
+                    }
+                    options = await MakeMove(shortestPath.Value, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+
+                    continue;
+                }
+
                 // Looking for known route to exit point
                 var stack = _exitCrumbs.OrderBy(st => st.Count).FirstOrDefault();
                 if (stack != null)
@@ -82,6 +96,19 @@ namespace Maze
                 if (options.CanCollectScoreHere)
                 {
                     options = await _client.CollectScore();
+                    continue;
+                }
+
+                var shortestPath = _xyGrid.ShortestPathToCollectionPoint();
+                if (shortestPath.HasValue)
+                {
+                    if (Global.IsInteractive)
+                    {
+                        _xyGrid.Draw($"Direction to collection point: {shortestPath.Value}");
+                        Console.ReadKey(true);
+                    }
+                    options = await MakeMove(shortestPath.Value, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+
                     continue;
                 }
 
