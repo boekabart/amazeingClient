@@ -35,9 +35,13 @@ namespace Maze
                 // Looking for exit!
                 if (options.CanExitMazeHere)
                 {
-                    //Console.WriteLine("Enter please");
-                    //Console.ReadLine();
+                    if (Global.IsInteractive)
+                    {
+                        _xyGrid.Draw("Finished");
+                        Console.ReadKey();
+                    }
                     await _client.ExitMaze();
+                    
                     return;
                 }
 
@@ -134,10 +138,10 @@ namespace Maze
                 Console.Error.WriteLine("Stuck while collecting!");
             }
 
-            if (false && !_xyGrid.InvalidState)
+            if (!_xyGrid.InvalidState)
             {
-                _xyGrid.Draw();
-                Console.ReadKey();
+                //_xyGrid.Draw();
+                //Console.ReadKey();
             }
             
             return options;
@@ -196,6 +200,9 @@ namespace Maze
                 // Check for nearby exits and collectionPoints
                 TrackExits(newOptions, _exitCrumbs);
                 TrackCollectionPoints(newOptions, _collectCrumbs);
+                
+                //_xyGrid.Draw();
+                //Console.ReadKey(true);
 
                 return newOptions;
             }
@@ -222,7 +229,9 @@ namespace Maze
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
-                .ThenBy(ma => _xyGrid.SeenTile(ma.Direction)) // Un-prefer tiles I've seen and apparently didn't visit.. for a reason?
+                //.ThenBy(ma => _xyGrid.SeenTile(ma.Direction)) // Un-prefer tiles I've seen and apparently didn't visit.. for a reason?
+                .ThenByDescending(ma => _xyGrid.HasIslandNeighbor(ma.Direction)) // prefer tiles that will lead to completion of an unknown island
+                .ThenByDescending(ma => _xyGrid.UnvisitedPotential(ma.Direction)) 
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability

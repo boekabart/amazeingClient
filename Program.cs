@@ -17,6 +17,8 @@ namespace Maze
             }
 			
 			var mazeNames= args.Skip(3).Select(name => name.ToLowerInvariant()).ToHashSet();
+            Global.IsInteractive = mazeNames.Any();
+            
             var serverHost = args.Skip(2).FirstOrDefault() ?? "maze.hightechict.nl";
             var apiKey = args.FirstOrDefault() ?? throw new Exception("Key?");
             var ourName = args.Skip(1).FirstOrDefault() ?? "deBoerIsTroef";
@@ -51,7 +53,7 @@ namespace Maze
             }
             
             // Do the Konami Move
-            if (!mazeNames.Any())
+            if (!Global.IsInteractive)
             {
                 var baseInvocations = client.Invocations;
                 await DoTheKonami(client);

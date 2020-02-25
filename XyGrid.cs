@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Drawing;
 using System.Linq;
 
 namespace Maze
@@ -37,7 +36,7 @@ namespace Maze
             {
                 if (moveAction.AllowsExit != previousKnownState.IsExit
                     || moveAction.AllowsScoreCollection != previousKnownState.IsCollectionPoint
-                    || moveAction.HasBeenVisited != previousKnownState.IsVisited)
+                    /*|| moveAction.HasBeenVisited != previousKnownState.IsVisited*/) // HEY, loop detection
                     return null;
                 return new Tile(moveAction, previousKnownState.PossibleDirections);
             }
@@ -66,11 +65,12 @@ namespace Maze
             }
         }
 
-        public void Draw()
+        public void Draw(string status)
         {
             var offsetX = _dick.Keys.Min(xy => xy.X);
             var offsetY = _dick.Keys.Max(xy => xy.Y);
             Console.Clear();
+            Console.Error.WriteLine(status);
             foreach (var kvp in _dick)
             {
                 var x = 1 + kvp.Key.X - offsetX;
@@ -79,18 +79,15 @@ namespace Maze
                 Console.SetCursorPosition(x, y);
                 var tile = kvp.Value;
                 Console.ForegroundColor = tile.IsVisited ? ConsoleColor.White : ConsoleColor.DarkGray;
-                Console.Write( "X");
+                Console.Error.Write( $"{(HasIslandNeighbor(kvp.Key)?"!":UnvisitedPotential(kvp.Key).ToString())}");
             }
-            Console.SetCursorPosition(1 + X - offsetX, 1 + offsetY - Y);
+            Console.SetCursorPosition(1 + CurrentLocation.X - offsetX, 1 + offsetY - CurrentLocation.Y);
         }
 
         public (int X, int Y) CurrentLocation { get; private set; }
-        public int X => CurrentLocation.X;
-        public int Y => CurrentLocation.Y;
         public bool InvalidState { get; private set; }
         public void Register(PossibleActionsAndCurrentScore options)
         {
-            if (InvalidState) return;
             if (!UpdateCurrent(options))
                 return; 
 
@@ -103,6 +100,27 @@ namespace Maze
 
         public int SeenTile(Direction dir) => InvalidState ? 0 :
             _dick.TryGetValue(Moved(dir), out var tile) ? tile.PossibleDirections.Count : 0;
+
+        public int UnvisitedPotential(Direction dir) => UnvisitedPotential(Moved(dir));
+
+        private int UnvisitedPotential((int X, int Y) pos) => InvalidState?0:Extensions.AllDirections.Select(d => pos.Moved(d)).Max(HowManyUnknownNeighbours);
+
+        private int HowManyUnknownNeighbours((int X, int Y) pos)
+        {
+            return InvalidState ? 0 : Extensions.AllDirections
+                .Select(d => pos.Moved(d))
+                .Count(p => !_dick.ContainsKey(p));
+        }
+
+        public bool HasIslandNeighbor(Direction dir) => HasIslandNeighbor(Moved(dir));
+
+        private bool HasIslandNeighbor((int X, int Y) pos)
+        {
+            return !InvalidState && Extensions.AllDirections
+                       .Select(d => pos.Moved(d))
+                       .Where(p => !_dick.ContainsKey(p)) // Unknown location
+                       .Any(p => HowManyUnknownNeighbours(p) == 0); // Without any unknown neighbours
+        }
         
         private readonly Dictionary<(int X, int Y), Tile> _dick = new Dictionary<(int X, int Y), Tile>();
 
@@ -114,10 +132,15 @@ namespace Maze
             
             if (newTile == null)
             {
-//                Draw();
-//                Console.ReadKey();
+                if (InvalidState) return false;
+                var message = $"XY-incompatible maze detected. Conflict with known state at {CurrentLocation.X},{CurrentLocation.Y}.";
+                if (Global.IsInteractive)
+                {
+                    Draw(message);
+                    Console.ReadKey();
+                }
 
-                Console.Error.WriteLine($"XY-incompatible maze detected. Conflict with known state at {CurrentLocation.X},{CurrentLocation.Y}.");
+                Console.Error.WriteLine(message);
                 InvalidState = true;
                 return false;
             }
@@ -132,15 +155,21 @@ namespace Maze
             var newTile = _dick.TryGetValue(location, out Tile previousState)
                 ? Tile.TryMerge(moveAction, previousState)
                 : moveAction.HasBeenVisited
-                    ? null
+                    ? new Tile(moveAction) // HEY! That was unexpected!? Portal detected!!
                     : new Tile(moveAction);
             
             if (newTile == null)
             {
-//                Draw();
-//                Console.ReadKey();
+                if (InvalidState) return false;
+                var message =
+                    $"XY-incompatible maze detected. Conflict with known state at {location.X},{location.Y} {moveAction.Direction}.";
+                if (Global.IsInteractive)
+                {
+                    Draw(message);
+                    Console.ReadKey();
+                }
 
-                Console.Error.WriteLine($"XY-incompatible maze detected. Conflict with known state at {location.X},{location.Y} {moveAction.Direction}.");
+                Console.Error.WriteLine(message);
                 InvalidState = true;
                 return false;
             }
@@ -149,22 +178,7 @@ namespace Maze
             return true;
         }
 
-        private (int X, int Y) Moved(Direction dir)
-        {
-            switch(dir)
-            {
-                case Direction.Up:
-                    return (X, Y + 1);
-                case Direction.Right:
-                    return (X + 1, Y);
-                case Direction.Down:
-                    return (X, Y - 1);
-                case Direction.Left:
-                    return (X - 1, Y);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(dir), dir, null);
-            }
-        }
+        private (int X, int Y) Moved(Direction dir) => CurrentLocation.Moved(dir);
 
         public void RegisterMove(Direction dir) => CurrentLocation = Moved(dir);
     }
