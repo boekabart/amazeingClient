@@ -265,7 +265,7 @@ namespace Maze
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
-                .ThenBy(ma => _xyGrid.DistanceToReward(ma))
+                //.ThenBy(ma => _xyGrid.DistanceToReward(ma)) // That never helps for unvisited tiles. same as previous line...
                 .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island
                 .ThenByDescending(UnvisitedPotential) 
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
