@@ -326,10 +326,10 @@ namespace Maze
 
             if (newTile.Equals(previousState))
             {
-                Console.Error.WriteLine("Same");
+                //Console.Error.WriteLine($"Same {CurrentLocation.X},{CurrentLocation.Y}");
                 return true;
             }
-            Console.Error.WriteLine("Diff");
+            //Console.Error.WriteLine($"Diff {CurrentLocation.X},{CurrentLocation.Y}");
 
             _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
 
@@ -364,10 +364,10 @@ namespace Maze
 
             if (newTile.Equals(previousState))
             {
-                Console.Error.WriteLine("Same");
+                //Console.Error.WriteLine($"Same {moveAction.Direction} {location.X},{location.Y}");
                 return true;
             }
-            Console.Error.WriteLine("Diff");
+            //Console.Error.WriteLine($"Diff {moveAction.Direction} {location.X},{location.Y}");
 
             _rewardDictionary = _exitDictionary = _collectionPointDictionary = null;
             _dick[location] = newTile;
