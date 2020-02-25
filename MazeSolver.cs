@@ -48,13 +48,13 @@ namespace Maze
                 var shortestPath = _xyGrid.ShortestPathToExit();
                 if (shortestPath.HasValue)
                 {
-                    if (Global.IsInteractive)
+                    if (false && Global.IsInteractive)
                     {
                         _xyGrid.DrawExit();
                         _xyGrid.Draw($"Direction to exit point: {shortestPath.Value}");
                         Console.ReadKey(true);
                     }
-                    options = await MakeMove(shortestPath.Value, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(shortestPath.Value);
 
                     continue;
                 }
@@ -65,7 +65,7 @@ namespace Maze
                 {
                     var dir = stack.Peek();
                     var step = dir.Reversed();
-                    options = await MakeMove(step, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(step);
                     continue;
                 }
                 
@@ -73,7 +73,7 @@ namespace Maze
                 var mostUsefulDirection = MostUsefulDirForLocatingExitPoint(options, _crawlCrumbs);
                 if (mostUsefulDirection != null)
                 {
-                    options = await MakeMove(mostUsefulDirection.Direction, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(mostUsefulDirection.Direction);
                     continue;
                 }
 
@@ -81,7 +81,7 @@ namespace Maze
                 if (_crawlCrumbs.Any())
                 {
                     var dir = _crawlCrumbs.Peek().Reversed();
-                    options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(dir);
                     continue;
                 }
 
@@ -102,12 +102,12 @@ namespace Maze
                 var shortestPath = _xyGrid.ShortestPathToCollectionPoint();
                 if (shortestPath.HasValue)
                 {
-                    if (Global.IsInteractive)
+                    if (false && Global.IsInteractive)
                     {
                         _xyGrid.Draw($"Direction to collection point: {shortestPath.Value}");
                         Console.ReadKey(true);
                     }
-                    options = await MakeMove(shortestPath.Value, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(shortestPath.Value);
 
                     continue;
                 }
@@ -118,7 +118,7 @@ namespace Maze
                 {
                     var dir = stack.Peek();
                     var step = dir.Reversed();
-                    options = await MakeMove(step, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(step);
                     continue;
                 }
                 
@@ -126,7 +126,7 @@ namespace Maze
                 var mostUsefulDirection = MostUsefulDirForLocatingCollectionPoint(options, _crawlCrumbs);
                 if (mostUsefulDirection != null)
                 {
-                    options = await MakeMove(mostUsefulDirection.Direction, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(mostUsefulDirection.Direction);
                     continue;
                 }
 
@@ -134,7 +134,7 @@ namespace Maze
                 if (_crawlCrumbs.Any())
                 {
                     var dir = _crawlCrumbs.Peek().Reversed();
-                    options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(dir);
                     continue;
                 }
 
@@ -148,29 +148,37 @@ namespace Maze
         {
             while (options.CurrentScoreInHand + options.CurrentScoreInBag < _maze.PotentialReward)
             {
+                var shortestPath = _xyGrid.ShortestPathToUnvisitedTileWithReward();
+                if (shortestPath.HasValue)
+                {
+                    if (false && Global.IsInteractive)
+                    {
+                        _xyGrid.Draw($"Shortest direction to unvisited Reward: {shortestPath.Value}");
+                        Console.ReadKey(true);
+                    }
+                    options = await MakeMove(shortestPath.Value);
+
+                    continue;
+                }
+                
                 var mostUsefulDirection = MostUsefulDirForCollecting(options, _crawlCrumbs);
                 if (mostUsefulDirection != null)
                 {
-                    options = await MakeMove(mostUsefulDirection.Direction, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(mostUsefulDirection.Direction);
                     continue;
                 }
                 
                 if (_crawlCrumbs.Any())
                 {
                     var dir = _crawlCrumbs.Peek().Reversed();
-                    options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
+                    options = await MakeMove(dir);
                     continue;
                 }
-
+                
                 Console.Error.WriteLine("Stuck while collecting!");
+                options = await MakeMove(options.PossibleMoveActions.Select(ma => ma.Direction).OrderBy(dir => dir == _lastDir.Reversed()).ThenBy(_=>RandomGenerator.Next()).First());
             }
 
-            if (!_xyGrid.InvalidState)
-            {
-                //_xyGrid.Draw();
-                //Console.ReadKey();
-            }
-            
             return options;
         }
 
@@ -203,9 +211,7 @@ namespace Maze
             }
         }
 
-        private async Task<PossibleActionsAndCurrentScore> MakeMove(Direction direction,
-            List<Stack<Direction>> exitCrumbs, List<Stack<Direction>> collectCrumbs,
-            Stack<Direction> crumbs)
+        private async Task<PossibleActionsAndCurrentScore> MakeMove(Direction direction)
         {
             try
             {
@@ -216,13 +222,15 @@ namespace Maze
                 _xyGrid.Register(newOptions);
                 
                 // Record the move in all crumbs
-                foreach (var st in exitCrumbs)
+                foreach (var st in _exitCrumbs)
                     Push(st, direction);
 
-                foreach (var st in collectCrumbs)
+                foreach (var st in _collectCrumbs)
                     Push(st, direction);
 
-                Push(crumbs, direction);
+                Push(_crawlCrumbs, direction);
+
+                _lastDir = direction;
 
                 // Check for nearby exits and collectionPoints
                 TrackExits(newOptions, _exitCrumbs);
@@ -245,6 +253,7 @@ namespace Maze
         private readonly Stack<Direction> _crawlCrumbs = new Stack<Direction>();
         private readonly List<Stack<Direction>> _collectCrumbs = new List<Stack<Direction>>();
         private readonly List<Stack<Direction>> _exitCrumbs = new List<Stack<Direction>>();
+        private Direction _lastDir;
 
         private MoveAction MostUsefulDirForCollecting(PossibleActionsAndCurrentScore options,
             Stack<Direction> crawlCrumbs)

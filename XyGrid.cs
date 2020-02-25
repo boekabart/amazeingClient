@@ -13,6 +13,7 @@ namespace Maze
             public bool IsCollectionPoint { get; }
             public bool IsVisited { get; }
             public ImmutableHashSet<Direction> PossibleDirections { get; }
+            public bool Reward { get; private set; }
 
             public Tile(PossibleActionsAndCurrentScore currentLocation)
             {
@@ -30,6 +31,7 @@ namespace Maze
                 IsCollectionPoint = moveAction.AllowsScoreCollection;
                 IsVisited = moveAction.HasBeenVisited;
                 PossibleDirections = alreadyKnownDirections.Add(moveAction.Direction.Reversed());
+                Reward = moveAction.RewardOnDestination != 0;
             }
 
             public static Tile TryMerge(MoveAction moveAction, Tile previousKnownState)
@@ -134,6 +136,19 @@ namespace Maze
         
         public Dictionary<(int X, int Y), (int Distance, Direction Direction)> _exitDictionary = new Dictionary<(int X, int Y), (int Distance, Direction Direction)>();
         public Dictionary<(int X, int Y), (int Distance, Direction Direction)> _collectionPointDictionary = new Dictionary<(int X, int Y), (int Distance, Direction Direction)>();
+
+        public Direction? ShortestPathToUnvisitedTileWithReward()
+        {
+            if (InvalidState)
+                return null;
+            
+            var _dictionary = PopulateShortestPathDictionary(_dick.Where(d=> !d.Value.IsVisited && d.Value.Reward).Select(d => d.Key).ToList());
+
+            if (!_dictionary.ContainsKey(CurrentLocation))
+                return null;
+
+            return _dictionary[CurrentLocation].Direction;
+        }
 
         public Direction? ShortestPathToCollectionPoint()
         {
