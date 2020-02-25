@@ -109,7 +109,7 @@ namespace Maze
         public bool DrawCollection() => Draw(UpdateCollectionRoutes());
         public bool DrawExit() => Draw(UpdateExitRoutes());
         public bool DrawReward() => Draw(UpdateRewardRoutes(CurrentLocation));
-        public bool Draw(Dictionary<(int X, int Y),(int Distance, Direction dir)> dick)
+        public static bool Draw(Dictionary<(int X, int Y),(int Distance, Direction dir)> dick)
         {
             Console.Clear();
             if (!dick.Any())
@@ -206,7 +206,7 @@ namespace Maze
                 ? _rewardDictionary
                 : PopulateShortestPathDictionary(_dick.Where(d => d.Value.Reward)
                         .Select(d => d.Key)
-                        .ToList());
+                        .ToList(), CurrentLocation);
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateUnvisitedRoutes((int X, int Y) location)
@@ -215,16 +215,15 @@ namespace Maze
                 ? _unvisitedDictionary
                 : PopulateShortestPathDictionary(_dick.Where(d => !d.Value.IsVisited)
                     .Select(d => d.Key)
-                    .ToList());
+                    .ToList(), CurrentLocation);
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateExitRoutes()
         {
-            return _exitDictionary = _exitDictionary?.ContainsKey(CurrentLocation) ?? false
-                ? _exitDictionary
-                : PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsExit)
+            return _exitDictionary = _exitDictionary ??
+                                     PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsExit)
                     .Select(d => d.Key)
-                    .ToList());
+                    .ToList(), null);
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateCollectionRoutes()
@@ -233,7 +232,7 @@ namespace Maze
                 ? _collectionPointDictionary
                 : PopulateShortestPathDictionary(_dick.Where(d=> d.Value.IsCollectionPoint)
                     .Select(d => d.Key)
-                    .ToList());
+                    .ToList(), CurrentLocation, true);
         }
 
         public Direction? ShortestPathToCollectionPoint()
@@ -262,9 +261,9 @@ namespace Maze
             return routes[CurrentLocation].Direction;
         }
 
-        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets)
+        private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets, (int X, int Y)? referenceLocation, bool basedOnExit = false)
         {
-            var routes = InitRoutes(targets);
+            var routes= basedOnExit ? InitRoutes(targets, UpdateExitRoutes()) : InitRoutes(targets);
             var toDo = new Queue<(int X, int Y)>(targets);
 
             var bestSoFar = int.MaxValue - 1;
@@ -286,7 +285,7 @@ namespace Maze
                     }
 
                     routes[p2] = (newDist, dir.Reversed());
-                    if (p2 == CurrentLocation)
+                    if (referenceLocation != null && p2 == referenceLocation)
                         bestSoFar = newDist;
 
                     toDo.Enqueue(p2);
@@ -299,6 +298,15 @@ namespace Maze
         private static Dictionary<(int X, int Y), (int Distance, Direction Direction)> InitRoutes(IReadOnlyCollection<(int X, int Y)> targets)
         {
             return targets.ToDictionary(pos => pos, _ => (0, Direction.Down));
+        }
+
+        private static Dictionary<(int X, int Y), (int Distance, Direction Direction)> InitRoutes(
+            IReadOnlyCollection<(int X, int Y)> targets,
+            Dictionary<(int X, int Y), (int Distance, Direction Direction)> exitRoutes)
+        {
+            if (!exitRoutes.Any())
+                return InitRoutes(targets);
+            return targets.ToDictionary(pos => pos, pos => exitRoutes[pos]);
         }
 
         private (int X, int Y) TrackBack(ImmutableStack<Direction> trail)
