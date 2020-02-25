@@ -120,6 +120,7 @@ namespace Maze
 
         public bool DrawCollection() => Draw(UpdateCollectionRoutes());
         public bool DrawExit() => Draw(UpdateExitRoutes());
+        public bool DrawUnvisited() => Draw(UpdateUnvisitedRoutes(CurrentLocation));
         public bool DrawReward() => Draw(UpdateRewardRoutes(CurrentLocation));
         public static bool Draw(Dictionary<(int X, int Y),(int Distance, Direction dir)> dick)
         {
@@ -215,14 +216,44 @@ namespace Maze
             return info.Distance;
         }
 
-        public Direction? ShortestPathToReward()
+        public int DistanceToExit(MoveAction ma)
         {
             if (HasInvalidState)
-                return null;
+                return int.MaxValue;
 
-            var rewardDictionary = UpdateRewardRoutes(CurrentLocation);
+            if (ma.AllowsExit)
+                return 0;
 
-            return rewardDictionary.TryGetValue(CurrentLocation, out var info)? info.Direction:(Direction?) null;
+            var location = RelativeLocation(ma.Direction);
+            var exitRoutes = UpdateExitRoutes();
+
+            if (!exitRoutes.TryGetValue(location, value: out var info))
+            {
+                //Console.WriteLine($"No idea {ma.Direction} {location.X} {location.Y}");
+                return int.MaxValue;
+            }
+            //Console.WriteLine($"{info.Distance} @ {ma.Direction} {location.X} {location.Y}");
+            return info.Distance;
+        }
+
+        public int DistanceToCollectionPoint(MoveAction ma)
+        {
+            if (HasInvalidState)
+                return int.MaxValue;
+
+            if (ma.AllowsScoreCollection)
+                return 0;
+
+            var location = RelativeLocation(ma.Direction);
+            var collectionRoutes = UpdateCollectionRoutes();
+
+            if (!collectionRoutes.TryGetValue(location, value: out var info))
+            {
+                //Console.WriteLine($"No idea {ma.Direction} {location.X} {location.Y}");
+                return int.MaxValue;
+            }
+            //Console.WriteLine($"{info.Distance} @ {ma.Direction} {location.X} {location.Y}");
+            return info.Distance;
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> UpdateRewardRoutes(
@@ -258,32 +289,6 @@ namespace Maze
                                                     .Where(d => d.Value.IsCollectionPoint)
                                                     .Select(d => d.Key)
                                                     .ToList(), CurrentLocation, UpdateExitRoutes());
-        }
-
-        public Direction? ShortestPathToCollectionPoint()
-        {
-            if (HasInvalidState)
-                return null;
-
-            var routes = UpdateCollectionRoutes();
-
-            if (!routes.ContainsKey(CurrentLocation))
-                return null;
-
-            return routes[CurrentLocation].Direction;
-        }
-
-        public Direction? ShortestPathToExit()
-        {
-            if (HasInvalidState)
-                return null;
-
-            var routes = UpdateExitRoutes();
-
-            if (!routes.ContainsKey(CurrentLocation))
-                return null;
-
-            return routes[CurrentLocation].Direction;
         }
 
         private Dictionary<(int X, int Y), (int Distance, Direction Direction)> PopulateShortestPathDictionary(IReadOnlyCollection<(int X, int Y)> targets, (int X, int Y)? location, Dictionary<(int X, int Y), (int Distance, Direction Direction)> basedOn)

@@ -31,6 +31,13 @@ namespace Maze
 
         private async Task GoToExit(PossibleActionsAndCurrentScore options)
         {
+            if (Global.IsInteractive)
+            {
+                _xyGrid.Draw($"Ready To Collect");
+                Console.ReadKey(true);
+                _xyGrid.DrawUnvisited();
+                Console.ReadKey(true);
+            }
             while (true)
             {
                 // Looking for exit!
@@ -45,48 +52,9 @@ namespace Maze
                     
                     return;
                 }
-
-                var shortestPath = _xyGrid.ShortestPathToExit();
-                if (shortestPath.HasValue)
-                {
-                    if (false && Global.IsInteractive)
-                    {
-                        _xyGrid.DrawExit();
-                        _xyGrid.Draw($"Direction to exit point: {shortestPath.Value}");
-                        Console.ReadKey(true);
-                    }
-                    options = await MakeMove(shortestPath.Value);
-
-                    continue;
-                }
-
-                // Looking for known route to exit point
-                var stack = _exitCrumbs.OrderBy(st => st.Count).FirstOrDefault();
-                if (stack != null)
-                {
-                    var dir = stack.Peek();
-                    var step = dir.Reversed();
-                    options = await MakeMove(step);
-                    continue;
-                }
                 
-                // No known EP. Find the most useful direction to hopefully find one 
-                var mostUsefulDirection = MostUsefulDirForLocatingExitPoint(options, _lastDir);
-                if (mostUsefulDirection != null)
-                {
-                    options = await MakeMove(mostUsefulDirection.Direction);
-                    continue;
-                }
-
-                // Back-track if no new directions were found
-                if (_crawlCrumbs.Any())
-                {
-                    var dir = _crawlCrumbs.Peek().Reversed();
-                    options = await MakeMove(dir);
-                    continue;
-                }
-
-                Console.WriteLine("No possible route to Exit Point!");
+                var mostUsefulDirection = MostUsefulDirForLocatingExitPoint(options);
+                options = await MakeMove(mostUsefulDirection.Direction);
             }
         }
 
@@ -108,48 +76,8 @@ namespace Maze
                     continue;
                 }
 
-                var shortestPath = _xyGrid.ShortestPathToCollectionPoint();
-                if (shortestPath.HasValue)
-                {
-                    if (false && Global.IsInteractive)
-                    {
-                        _xyGrid.DrawCollection();
-                        Console.ReadKey(true);
-                        _xyGrid.Draw($"Direction to collection point: {shortestPath.Value}");
-                        Console.ReadKey(true);
-                    }
-                    options = await MakeMove(shortestPath.Value);
-
-                    continue;
-                }
-
-                // Looking for known route to collection point
-                var stack = FindBestCollectStack(_collectCrumbs, _exitCrumbs);
-                if (stack != null)
-                {
-                    var dir = stack.Peek();
-                    var step = dir.Reversed();
-                    options = await MakeMove(step);
-                    continue;
-                }
-                
-                // No known CP. Find the most useful direction to hopefully find one 
-                var mostUsefulDirection = MostUsefulDirForLocatingCollectionPoint(options, _lastDir);
-                if (mostUsefulDirection != null)
-                {
-                    options = await MakeMove(mostUsefulDirection.Direction);
-                    continue;
-                }
-
-                // Back-track if no new directions were found
-                if (_crawlCrumbs.Any())
-                {
-                    var dir = _crawlCrumbs.Peek().Reversed();
-                    options = await MakeMove(dir);
-                    continue;
-                }
-
-                Console.WriteLine("No possible route to Collection Point!");
+                var mostUsefulDirection = MostUsefulDirForLocatingCollectionPoint(options);
+                options = await MakeMove(mostUsefulDirection.Direction);
             }
 
             return options;
@@ -251,11 +179,11 @@ namespace Maze
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
                 .ThenBy(ma => _xyGrid.DistanceToReward(ma)) // Never helps for unvisited tiles. same as previous line...
                 .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma)) // Instead of backtracking?
-                //.ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island - Useful for left/right hugging
                 //.ThenByDescending(HowManyUnknownNeighbours) 
+                .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island - Useful for left/right hugging
                 .ThenByDescending(UnvisitedPotential) 
                 //.ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
-                .ThenBy(GoStraight) // Go Straight!
+                //.ThenBy(GoStraight) // Go Straight!
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, _lastDir))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
@@ -290,27 +218,24 @@ namespace Maze
             return ma.RewardOnDestination != 0 || _xyGrid.HasIslandNeighbor(ma.Direction);
         }
 
-        private static MoveAction MostUsefulDirForLocatingCollectionPoint(PossibleActionsAndCurrentScore options,
-            Direction? lastDir)
+        private  MoveAction MostUsefulDirForLocatingCollectionPoint(PossibleActionsAndCurrentScore options)
         {
             var mostUsefulDir = options
                 .PossibleMoveActions
-                .Where(ma =>
-                    !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
-                .OrderBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
-                .ThenBy(ma => HugTheLeftWall(ma.Direction, lastDir))
+                .OrderBy(ma => _xyGrid.DistanceToCollectionPoint(ma))
+                .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma))
+                .ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
                 .FirstOrDefault();
             return mostUsefulDir;
         }
 
-        private static MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options,
-            Direction? lastDir)
+        private MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options)
         {
             var mostUsefulDir = options
                 .PossibleMoveActions
-                .Where(ma =>
-                    !ma.HasBeenVisited) // Don't ever go where we've been before (backtracking will get us there if needed)
-                .OrderBy(ma => HugTheLeftWall(ma.Direction, lastDir))
+                .OrderBy(ma => _xyGrid.DistanceToExit(ma))
+                .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma))
+                .ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
                 .FirstOrDefault();
             return mostUsefulDir;
         }
