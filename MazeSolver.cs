@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Maze
@@ -8,15 +9,17 @@ namespace Maze
     internal class MazeSolver
     {
         private readonly IAmazeingClient _client;
+        private readonly XyGrid _xyGrid = new XyGrid();
 
         public MazeSolver( IAmazeingClient client,MazeInfo maze )
         {
             _client = client;
-            this._maze = maze;
+            _maze = maze;
         }
         public async Task Solve()
         {
             var options = await _client.EnterMaze(_maze.Name);
+            _xyGrid.Register(options);
             TrackExits(options, _exitCrumbs);
             TrackCollectionPoints(options, _collectCrumbs);
 
@@ -43,7 +46,7 @@ namespace Maze
                 if (stack != null)
                 {
                     var dir = stack.Peek();
-                    var step = ReverseDir(dir);
+                    var step = dir.Reversed();
                     options = await MakeMove(step, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
                     continue;
                 }
@@ -59,7 +62,7 @@ namespace Maze
                 // Back-track if no new directions were found
                 if (_crawlCrumbs.Any())
                 {
-                    var dir = ReverseDir(_crawlCrumbs.Peek());
+                    var dir = _crawlCrumbs.Peek().Reversed();
                     options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
                     continue;
                 }
@@ -83,7 +86,7 @@ namespace Maze
                 if (stack != null)
                 {
                     var dir = stack.Peek();
-                    var step = ReverseDir(dir);
+                    var step = dir.Reversed();
                     options = await MakeMove(step, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
                     continue;
                 }
@@ -99,7 +102,7 @@ namespace Maze
                 // Back-track if no new directions were found
                 if (_crawlCrumbs.Any())
                 {
-                    var dir = ReverseDir(_crawlCrumbs.Peek());
+                    var dir = _crawlCrumbs.Peek().Reversed();
                     options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
                     continue;
                 }
@@ -123,7 +126,7 @@ namespace Maze
                 
                 if (_crawlCrumbs.Any())
                 {
-                    var dir = ReverseDir(_crawlCrumbs.Peek());
+                    var dir = _crawlCrumbs.Peek().Reversed();
                     options = await MakeMove(dir, _exitCrumbs, _collectCrumbs, _crawlCrumbs);
                     continue;
                 }
@@ -131,6 +134,12 @@ namespace Maze
                 Console.Error.WriteLine("Stuck while collecting!");
             }
 
+            if (false && !_xyGrid.InvalidState)
+            {
+                _xyGrid.Draw();
+                Console.ReadKey();
+            }
+            
             return options;
         }
 
@@ -147,7 +156,7 @@ namespace Maze
             foreach (var dir in options.PossibleMoveActions.Where(ma => ma.AllowsExit))
             {
                 var stack = new Stack<Direction>();
-                stack.Push(ReverseDir(dir.Direction));
+                stack.Push(dir.Direction.Reversed());
                 exitCrumbs.Add(stack);
             }
         }
@@ -158,7 +167,7 @@ namespace Maze
             foreach (var dir in options.PossibleMoveActions.Where(ma => ma.AllowsScoreCollection))
             {
                 var stack = new Stack<Direction>();
-                stack.Push(ReverseDir(dir.Direction));
+                stack.Push(dir.Direction.Reversed());
                 collectCrumbs.Add(stack);
             }
         }
@@ -172,6 +181,8 @@ namespace Maze
                 var newOptions = await _client.Move(direction);
                 if (newOptions == null)
                     throw new ArgumentException();
+                _xyGrid.RegisterMove(direction);
+                _xyGrid.Register(newOptions);
                 
                 // Record the move in all crumbs
                 foreach (var st in exitCrumbs)
@@ -201,7 +212,7 @@ namespace Maze
         private readonly List<Stack<Direction>> _collectCrumbs = new List<Stack<Direction>>();
         private readonly List<Stack<Direction>> _exitCrumbs = new List<Stack<Direction>>();
 
-        private static MoveAction MostUsefulDirForCollecting(PossibleActionsAndCurrentScore options,
+        private MoveAction MostUsefulDirForCollecting(PossibleActionsAndCurrentScore options,
             Stack<Direction> crawlCrumbs)
         {
             var mostUsefulDir = options
@@ -211,6 +222,7 @@ namespace Maze
                 //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
                 //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
                 .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
+                .ThenBy(ma => _xyGrid.SeenTile(ma.Direction)) // Un-prefer tiles I've seen and apparently didn't visit.. for a reason?
                 .ThenBy(ma => HugTheLeftWall(ma.Direction, crawlCrumbs))
                 //.ThenBy(ma => RandomGenerator.Next())
                 .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
@@ -262,23 +274,10 @@ namespace Maze
                 return;
             }
 
-            if (stack.Count != 0 && stack.Peek() == ReverseDir(dir))
+            if (stack.Count != 0 && stack.Peek() == dir.Reversed())
                 stack.Pop();
             else
                 stack.Push(dir);
-        }
-
-        private static Direction ReverseDir(Direction bestDir)
-        {
-            switch (bestDir)
-            {
-                case Direction.Down: return Direction.Up;
-                case Direction.Up: return Direction.Down;
-                case Direction.Left: return Direction.Right;
-                case Direction.Right: return Direction.Left;
-                default:
-                    throw new ArgumentException("Bad dir");
-            }
         }
     }
 }
