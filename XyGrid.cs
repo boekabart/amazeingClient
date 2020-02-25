@@ -79,7 +79,9 @@ namespace Maze
                 Console.SetCursorPosition(x, y);
                 var tile = kvp.Value;
                 Console.ForegroundColor = tile.IsVisited ? ConsoleColor.White : ConsoleColor.DarkGray;
-                Console.Error.Write( $"{(HasIslandNeighbor(kvp.Key)?"!":UnvisitedPotential(kvp.Key).ToString())}");
+                var teken =tile.IsVisited ? "X": 
+                    (HasIslandNeighbor(kvp.Key)?"!":UnvisitedPotential(kvp.Key).ToString());
+                Console.Error.Write( $"{teken}");
             }
             Console.SetCursorPosition(1 + CurrentLocation.X - offsetX, 1 + offsetY - CurrentLocation.Y);
         }
@@ -97,9 +99,6 @@ namespace Maze
                     return;
             }
         }
-
-        public int SeenTile(Direction dir) => InvalidState ? 0 :
-            _dick.TryGetValue(Moved(dir), out var tile) ? tile.PossibleDirections.Count : 0;
 
         public int UnvisitedPotential(Direction dir) => UnvisitedPotential(Moved(dir));
 
