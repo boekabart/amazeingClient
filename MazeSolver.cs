@@ -30,7 +30,7 @@ namespace Maze
 
         private async Task GoToExit(PossibleActionsAndCurrentScore options)
         {
-            DrawMaze("Going to the Exit", () => _xyGrid.DrawExit(), () => _xyGrid.DrawCollection());
+            DrawMaze("Going to the Exit", () => _xyGrid.DrawExit(), () => _xyGrid.DrawUnvisited());
             while (true)
             {
                 // Looking for exit!
