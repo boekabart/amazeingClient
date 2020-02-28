@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Maze
@@ -24,32 +22,21 @@ namespace Maze
             TrackExits(options, _exitCrumbs);
             TrackCollectionPoints(options, _collectCrumbs);
 
-            options = await CollectAllPoints(options);
-            options = await CollectScoreInHand(options);
+            options = await FindAllRewards(options);
+            options = await GoToTheBank(options);
             await GoToExit(options);
+            DrawMaze("Finished!");
         }
 
         private async Task GoToExit(PossibleActionsAndCurrentScore options)
         {
-            if (Global.IsInteractive)
-            {
-                _xyGrid.Draw($"Ready To Collect");
-                Console.ReadKey(true);
-                _xyGrid.DrawUnvisited();
-                Console.ReadKey(true);
-            }
+            DrawMaze("Going to the Exit", () => _xyGrid.DrawExit(), () => _xyGrid.DrawCollection());
             while (true)
             {
                 // Looking for exit!
                 if (options.CanExitMazeHere)
                 {
-                    if (false && Global.IsInteractive)
-                    {
-                        _xyGrid.Draw("Finished");
-                        Console.ReadKey();
-                    }
                     await _client.ExitMaze();
-                    
                     return;
                 }
                 
@@ -58,15 +45,21 @@ namespace Maze
             }
         }
 
-        private async Task<PossibleActionsAndCurrentScore> CollectScoreInHand(PossibleActionsAndCurrentScore options)
+        private MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options)
         {
-            if (false && Global.IsInteractive)
-            {
-                _xyGrid.Draw($"Ready To Collect");
-                Console.ReadKey(true);
-                _xyGrid.DrawCollection();
-                Console.ReadKey(true);
-            }
+            var mostUsefulDir = options
+                .PossibleMoveActions
+                .WithTheSmallest(DistanceToExit)
+                .WithTheSmallest(DistanceToUnvisited)
+                .ThenBy(PreferTurningRight)
+                .FirstOrDefault();
+            return mostUsefulDir;
+        }
+
+
+        private async Task<PossibleActionsAndCurrentScore> GoToTheBank(PossibleActionsAndCurrentScore options)
+        {
+            DrawMaze("Going to the Bank", () => _xyGrid.DrawCollection());
 
             while (options.CurrentScoreInHand != 0)
             {
@@ -76,22 +69,63 @@ namespace Maze
                     continue;
                 }
 
-                var mostUsefulDirection = MostUsefulDirForLocatingCollectionPoint(options);
+                var mostUsefulDirection = MostUsefulDirForGoingToTheBank(options);
                 options = await MakeMove(mostUsefulDirection.Direction);
             }
 
             return options;
         }
 
-        private async Task<PossibleActionsAndCurrentScore> CollectAllPoints(PossibleActionsAndCurrentScore options)
+        private  MoveAction MostUsefulDirForGoingToTheBank(PossibleActionsAndCurrentScore options)
+        {
+            var mostUsefulDir = options
+                .PossibleMoveActions
+                .WithTheSmallest(DistanceToCollectionPoint)
+                .WithTheSmallest(DistanceToUnvisited)
+                .ThenBy(PreferTurningRight)
+                .FirstOrDefault();
+            return mostUsefulDir;
+        }
+
+        private async Task<PossibleActionsAndCurrentScore> FindAllRewards(PossibleActionsAndCurrentScore options)
         {
             while (options.CurrentScoreInHand + options.CurrentScoreInBag < _maze.PotentialReward)
             {
-                var mostUsefulDirection = MostUsefulDirForCollecting(options, _lastDir);
+                var mostUsefulDirection = MostUsefulDirForGathering(options);
                 options = await MakeMove(mostUsefulDirection.Direction);
             }
 
             return options;
+            
+        }
+
+        private MoveAction MostUsefulDirForGathering(PossibleActionsAndCurrentScore options)
+        {
+            var mostUsefulDir = options
+                .PossibleMoveActions
+                .Prefer(HasReward) // Prefer reward directions over non-reward. It might be the last straw!
+                .WithTheSmallest(DistanceToReward) // Never helps for unvisited tiles. same as previous line...
+                .WithTheSmallest(DistanceToUnvisited) // Instead of backtracking?
+                .Prefer(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island - Useful for left/right 'wall' hugging
+                .WithTheMost(UnvisitedPotential)
+                .ThenBy(PreferTurningLeft)
+                .ThenByDescending(LeftDownRightUp) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
+                .FirstOrDefault();
+            return mostUsefulDir;
+        }
+
+        private void DrawMaze(string reason, params Action[] andThis)
+        {
+            if (Global.IsInteractive)
+            {
+                _xyGrid.Draw(reason);
+                Console.ReadKey(true);
+                foreach (var action in andThis)
+                {
+                    action.Invoke();
+                    Console.ReadKey(true);
+                }
+            }
         }
 
         private static Stack<Direction> FindBestCollectStack(List<Stack<Direction>> collectCrumbs,
@@ -160,102 +194,54 @@ namespace Maze
             }
         }
 
-        static readonly Random RandomGenerator = new Random();
         private readonly MazeInfo _maze;
         private readonly Stack<Direction> _crawlCrumbs = new Stack<Direction>();
         private readonly List<Stack<Direction>> _collectCrumbs = new List<Stack<Direction>>();
         private readonly List<Stack<Direction>> _exitCrumbs = new List<Stack<Direction>>();
         private Direction? _lastDir;
 
-        private MoveAction MostUsefulDirForCollecting(PossibleActionsAndCurrentScore options,
-            Direction? lastDir)
-        {
-            var mostUsefulDir = options
-                .PossibleMoveActions
-                .OrderBy(_ => 1)
-                //.OrderBy(ma => ma.HasBeenVisited) // Prefer mainly to boldly go where no-one, etc
-                //.ThenBy(ma => ma.AllowsScoreCollection) // Un-prefer ScoreCollection Points, we'll get there later
-                //.ThenBy(ma => ma.AllowsExit) // Un-prefer exits, we'll get there later
-                .ThenBy(ma => ma.RewardOnDestination == 0) // Prefer reward directions over non-reward. It might be the last straw!
-                .ThenBy(ma => _xyGrid.DistanceToReward(ma)) // Never helps for unvisited tiles. same as previous line...
-                .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma)) // Instead of backtracking?
-                //.ThenByDescending(HowManyUnknownNeighbours) 
-                .ThenByDescending(HasIslandNeighbour) // prefer tiles that will lead to completion of an unknown island - Useful for left/right hugging
-                .ThenByDescending(UnvisitedPotential) 
-                //.ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
-                //.ThenBy(GoStraight) // Go Straight!
-                .ThenBy(ma => HugTheLeftWall(ma.Direction, _lastDir))
-                //.ThenBy(ma => RandomGenerator.Next())
-                .ThenByDescending(ma => ma.Direction) // Prefer Starting Left over Down over Right over Up... no real reason, just for predictability
-                .FirstOrDefault();
-            return mostUsefulDir;
-        }
+        private Direction LeftDownRightUp(MoveAction ma) => ma.Direction;
 
-        private bool GoStraight(MoveAction ma)
-        {
-            return _lastDir.HasValue && _lastDir != ma.Direction;
-        }
+        private int DistanceToUnvisited(MoveAction ma) => _xyGrid.DistanceToUnvisited(ma);
 
-        private int HowManyUnknownNeighbours(MoveAction ma)
-        {
-            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
-            return ma.RewardOnDestination != 0
-                ? 0
-                : _xyGrid.HowManyUnknownNeighbours(ma.Direction);
-        }
+        private int DistanceToReward(MoveAction ma) => _xyGrid.DistanceToReward(ma);
+
+        private int DistanceToCollectionPoint(MoveAction ma) => _xyGrid.DistanceToCollectionPoint(ma);
+
+        private int DistanceToExit(MoveAction ma) => _xyGrid.DistanceToExit(ma);
+
+        private bool HasReward(MoveAction ma) => ma.RewardOnDestination != 0;
+
+        private bool GoStraight(MoveAction ma) => _lastDir.HasValue && _lastDir == ma.Direction;
 
         private int UnvisitedPotential(MoveAction ma)
         {
             // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
-            return ma.RewardOnDestination != 0
-                ? 0
-                : _xyGrid.UnvisitedPotential(ma.Direction);
+            return HasReward(ma) ? 0 : _xyGrid.UnvisitedPotential(ma.Direction);
         }
 
         private bool HasIslandNeighbour(MoveAction ma)
         {
-            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this potential shouldn't be a factor 
-            return ma.RewardOnDestination != 0 || _xyGrid.HasIslandNeighbor(ma.Direction);
+            // This is useful for Sparse mazes. Between Scoring tiles that must be visited anyway, this shouldn't be a factor 
+            return HasReward(ma) || _xyGrid.HasIslandNeighbor(ma.Direction);
         }
 
-        private  MoveAction MostUsefulDirForLocatingCollectionPoint(PossibleActionsAndCurrentScore options)
+        private int PreferTurningLeft(MoveAction moveAction)
         {
-            var mostUsefulDir = options
-                .PossibleMoveActions
-                .OrderBy(ma => _xyGrid.DistanceToCollectionPoint(ma))
-                .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma))
-                .ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
-                .FirstOrDefault();
-            return mostUsefulDir;
+            return !_lastDir.HasValue ? 0 : PreferTurningLeft(moveAction.Direction, _lastDir.Value);
         }
 
-        private MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options)
+        private int PreferTurningRight(MoveAction moveAction)
         {
-            var mostUsefulDir = options
-                .PossibleMoveActions
-                .OrderBy(ma => _xyGrid.DistanceToExit(ma))
-                .ThenBy(ma => _xyGrid.DistanceToUnvisited(ma))
-                .ThenBy(ma => HugTheRightWall(ma.Direction, _lastDir))
-                .FirstOrDefault();
-            return mostUsefulDir;
+            return !_lastDir.HasValue ? 0 : PreferTurningRight(moveAction.Direction, _lastDir.Value);
         }
 
-        private static int HugTheLeftWall(Direction possibleDirection, Direction? incomingDirection)
-        {
-            return !incomingDirection.HasValue ? 0 : HugTheLeftWall(possibleDirection, incomingDirection.Value);
-        }
-
-        static int HugTheLeftWall(Direction possibleDirection, Direction incomingDirection)
+        static int PreferTurningLeft(Direction possibleDirection, Direction incomingDirection)
         {
             return (5 + possibleDirection - incomingDirection) % 4;
         }
 
-        private static int HugTheRightWall(Direction possibleDirection, Direction? incomingDirection)
-        {
-            return !incomingDirection.HasValue ? 0 : HugTheRightWall(possibleDirection, incomingDirection.Value);
-        }
-
-        static int HugTheRightWall(Direction possibleDirection, Direction incomingDirection)
+        static int PreferTurningRight(Direction possibleDirection, Direction incomingDirection)
         {
             return (5 + incomingDirection - possibleDirection) % 4;
         }

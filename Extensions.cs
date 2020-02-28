@@ -1,11 +1,27 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Maze
 {
     internal static class Extensions
     {
+        internal static IOrderedEnumerable<T> Prefer<T>(this IEnumerable<T> src, Func<T, bool> which) =>
+            src.OrderByDescending(which);
+        
+        internal static IOrderedEnumerable<T> Prefer<T>(this IOrderedEnumerable<T> src, Func<T, bool> which) =>
+            src.ThenByDescending(which);
+        
+        internal static IOrderedEnumerable<T> WithTheMost<T>(this IOrderedEnumerable<T> src, Func<T, int> which) =>
+            src.ThenByDescending(which);
+        
+        internal static IOrderedEnumerable<T> WithTheSmallest<T>(this IOrderedEnumerable<T> src, Func<T, int> which) =>
+            src.ThenBy(which);
+        
+        internal static IOrderedEnumerable<T> WithTheSmallest<T>(this IEnumerable<T> src, Func<T, int> which) =>
+            src.OrderBy(which);
+        
         public static Direction Reversed(this Direction bestDir)
         {
             switch (bestDir)
