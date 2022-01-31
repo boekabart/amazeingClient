@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="HightechICT.Amazeing.Client.Rest" Version="*" />
   </ItemGroup>
 
 </Project>
