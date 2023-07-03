@@ -31,7 +31,11 @@ namespace Maze
 
         private async Task GoToExit(PossibleActionsAndCurrentScore options)
         {
-            DrawMaze("Going to the Exit", () => _xyGrid.DrawExit(), () => _xyGrid.DrawUnvisited());
+            if (_xyGrid.HasInvalidState)
+                DrawMaze("Going to the Exit");
+            else
+                DrawMaze("Going to the Exit", () => _xyGrid.DrawExit(), () => _xyGrid.DrawUnvisited());
+
             while (true)
             {
                 // Looking for exit!
@@ -42,25 +46,35 @@ namespace Maze
                 }
                 
                 var mostUsefulDirection = MostUsefulDirForLocatingExitPoint(options);
-                options = await MakeMove(mostUsefulDirection.Direction);
+                options = await MakeMove(mostUsefulDirection);
             }
         }
 
-        private MoveAction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options)
+        private Direction MostUsefulDirForLocatingExitPoint(PossibleActionsAndCurrentScore options)
         {
+            if (_xyGrid.HasInvalidState)
+            {
+                var stack = FindBestExitStack(_exitCrumbs);
+                if (stack != null)
+                    return stack.Peek().Reversed();
+                return MostUsefulDirForGathering(options).Direction;
+            }
             var mostUsefulDir = options
                 .PossibleMoveActions
                 .WithTheSmallest(DistanceToExit)
                 .WithTheSmallest(DistanceToUnvisited)
                 .ThenBy(PreferTurningRight)
                 .FirstOrDefault();
-            return mostUsefulDir;
+            return mostUsefulDir.Direction;
         }
 
 
         private async Task<PossibleActionsAndCurrentScore> GoToTheBank(PossibleActionsAndCurrentScore options)
         {
-            DrawMaze("Going to the Bank", () => _xyGrid.DrawCollection());
+            if (_xyGrid.HasInvalidState)
+                DrawMaze("Going to the Bank");
+            else
+                DrawMaze("Going to the Bank", () => _xyGrid.DrawCollection());
 
             while (options.CurrentScoreInHand != 0)
             {
@@ -71,21 +85,28 @@ namespace Maze
                 }
 
                 var mostUsefulDirection = MostUsefulDirForGoingToTheBank(options);
-                options = await MakeMove(mostUsefulDirection.Direction);
+                options = await MakeMove(mostUsefulDirection);
             }
 
             return options;
         }
 
-        private  MoveAction MostUsefulDirForGoingToTheBank(PossibleActionsAndCurrentScore options)
+        private  Direction MostUsefulDirForGoingToTheBank(PossibleActionsAndCurrentScore options)
         {
+            if (_xyGrid.HasInvalidState)
+            {
+                var stack = FindBestCollectStack(_collectCrumbs, _exitCrumbs);
+                if (stack != null)
+                    return stack.Peek().Reversed();
+                return MostUsefulDirForGathering(options).Direction;
+            }
             var mostUsefulDir = options
                 .PossibleMoveActions
                 .WithTheSmallest(DistanceToCollectionPoint)
                 .WithTheSmallest(DistanceToUnvisited)
                 .ThenBy(PreferTurningRight)
-                .FirstOrDefault();
-            return mostUsefulDir;
+                .First();
+            return mostUsefulDir!.Direction;
         }
 
         private async Task<PossibleActionsAndCurrentScore> FindAllRewards(PossibleActionsAndCurrentScore options)
@@ -132,7 +153,13 @@ namespace Maze
         private static Stack<Direction> FindBestCollectStack(List<Stack<Direction>> collectCrumbs,
             List<Stack<Direction>> exitCrumbs)
         {
-            var stack = collectCrumbs.OrderBy(st => st.Count).FirstOrDefault();
+            var stack = collectCrumbs.MinBy(st => st.Count);
+            return stack;
+        }
+
+        private static Stack<Direction> FindBestExitStack(List<Stack<Direction>> exitCrumbs)
+        {
+            var stack = exitCrumbs.MinBy(st => st.Count);
             return stack;
         }
 
