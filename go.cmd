@@ -8,5 +8,5 @@ if not defined AMAZEING_NAME echo please set AMAZEING_NAME
 if not defined AMAZEING_KEY goto :eind
 if not defined AMAZEING_NAME goto :eind
 
-dotnet run -c Release --no-build -- "%AMAZEING_KEY%" "%AMAZEING_NAME%" https://maze.hightechict.nl %1 %2 %3 %4 %5 %6 %7 %8 %9
+dotnet run -c Release --no-build -- "%AMAZEING_KEY%" "%AMAZEING_NAME%" https://maze.kluster.htiprojects.nl %1 %2 %3 %4 %5 %6 %7 %8 %9
 :eind

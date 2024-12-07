@@ -23,7 +23,7 @@ FOR /F "usebackq delims=" %%a IN (`git rev-parse HEAD`) DO (
 set FN=.output\%datetimef%_%COMMIT%.txt
 
 if not exist .output mkdir .output >nul
-dotnet run --no-build -c Release "%AMAZEING_KEY%" "%AMAZEING_NAME%" https://maze.hightechict.nl >%FN%
+dotnet run --no-build -c Release "%AMAZEING_KEY%" "%AMAZEING_NAME%" https://maze.kluster.htiprojects.nl >%FN%
 echo ----------------------------------------- >>%FN%
 echo -----------------------------------------
 type %FN%
