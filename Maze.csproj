@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HightechICT.Amazeing.Client.Rest" Version="1.0.1" />
+    <PackageReference Include="HightechICT.Amazeing.Client.Rest" Version="3.0.1" />
   </ItemGroup>
 
 </Project>

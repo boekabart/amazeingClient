@@ -41,6 +41,12 @@ namespace Maze
             await _amazeingClientImplementation.ExitMaze();
         }
 
+        public async Task<PossibleActionsAndCurrentScore> Tag(long tag)
+        {
+            IncreaseInvocationCount();
+            return await _amazeingClientImplementation.Tag(tag);
+        }
+
         public async Task ForgetPlayer()
         {
             IncreaseInvocationCount();
